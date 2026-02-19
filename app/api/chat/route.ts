@@ -54,8 +54,6 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (err) {
-        const error = err as Anthropic.APIError;
-
         if (err instanceof Anthropic.AuthenticationError) {
           send({ type: "error", code: "auth_error", message: "Invalid or missing API key" });
         } else if (err instanceof Anthropic.RateLimitError) {
@@ -63,7 +61,7 @@ export async function POST(req: NextRequest) {
         } else if (err instanceof Anthropic.APIConnectionError) {
           send({ type: "error", code: "connection_error", message: "Could not reach Anthropic API" });
         } else if (err instanceof Anthropic.APIError) {
-          send({ type: "error", code: "api_error", message: error.message, status: error.status });
+          send({ type: "error", code: "api_error", message: err.message, status: err.status });
         } else {
           send({ type: "error", code: "unknown_error", message: "An unexpected error occurred" });
         }
