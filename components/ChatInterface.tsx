@@ -547,7 +547,6 @@ export default function ChatInterface() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isStreaming || isParsingDoc}
-                title="Joindre un fichier PDF ou TXT"
                 className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{
                   color: documents.length > 0 ? lightPrimary : "rgba(255,255,255,0.25)",
