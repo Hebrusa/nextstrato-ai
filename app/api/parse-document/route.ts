@@ -1,9 +1,5 @@
 import { NextRequest } from "next/server";
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require("pdf-parse") as (
-  buffer: Buffer
-) => Promise<{ text: string }>;
+import { extractText, getDocumentProxy } from "unpdf";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const XLSX = require("xlsx") as {
@@ -38,9 +34,10 @@ export async function POST(req: NextRequest) {
 
   if (ext === "pdf") {
     try {
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const data = await pdfParse(buffer);
-      return Response.json({ text: data.text, name: file.name });
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await getDocumentProxy(new Uint8Array(arrayBuffer));
+      const { text } = await extractText(pdf, { mergePages: true });
+      return Response.json({ text, name: file.name });
     } catch {
       return Response.json({ error: "Failed to parse PDF" }, { status: 422 });
     }
