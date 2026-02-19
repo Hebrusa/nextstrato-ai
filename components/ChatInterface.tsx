@@ -391,6 +391,25 @@ export default function ChatInterface() {
               </span>
             </div>
 
+            {/* DataViz button */}
+            <button
+              onClick={() => documents.length >= 1 && setShowDataViz(true)}
+              title={documents.length === 0 ? "Chargez un fichier CSV/Excel pour analyser" : "Analyser les graphiques"}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+              style={{
+                background: documents.length >= 1 ? primary : "rgba(255,255,255,0.07)",
+                border: `1px solid ${documents.length >= 1 ? primary : "rgba(255,255,255,0.12)"}`,
+                color: documents.length >= 1 ? "#ffffff" : "rgba(255,255,255,0.4)",
+                cursor: documents.length >= 1 ? "pointer" : "not-allowed",
+                transition: "all 0.15s",
+                opacity: documents.length >= 1 ? 1 : 0.6,
+              }}
+              onMouseEnter={(e) => { if (documents.length >= 1) e.currentTarget.style.cssText += "opacity:0.85;"; }}
+              onMouseLeave={(e) => { if (documents.length >= 1) e.currentTarget.style.cssText += "opacity:1;"; }}
+            >
+              📊 <span>Analyser</span>
+            </button>
+
             {/* Config button */}
             <button
               onClick={() => setShowConfig((v) => !v)}

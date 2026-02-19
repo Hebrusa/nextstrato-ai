@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
-  BarChart, Bar, LineChart, Line,
+  BarChart, Bar, LineChart, Line, AreaChart, Area,
+  PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer,
 } from "recharts";
@@ -217,38 +218,114 @@ const gridProps = { stroke: "rgba(255,255,255,0.05)", strokeDasharray: "3 3" };
 /* ════════════════════════════════
    SingleChart
 ════════════════════════════════ */
+type ChartType = "bar" | "line" | "area" | "pie";
+
+const CHART_TYPES: { value: ChartType; label: string }[] = [
+  { value: "bar", label: "Bar" },
+  { value: "line", label: "Line" },
+  { value: "area", label: "Area" },
+  { value: "pie", label: "Pie" },
+];
+
 function SingleChart({ chart, primary, title }: { chart: ChartData; primary: string; title: string }) {
-  const COLORS = [primary, ACCENT, "#f59e0b"];
+  const [chartType, setChartType] = useState<ChartType>(chart.type);
+  const COLORS = [primary, ACCENT, "#f59e0b", "#a78bfa", "#34d399"];
   const common = { data: chart.data };
 
+  const btnStyle = (active: boolean): React.CSSProperties => ({
+    padding: "3px 10px", borderRadius: 4, border: "none", cursor: "pointer",
+    fontSize: 11, fontWeight: 500,
+    background: active ? "rgba(255,255,255,0.12)" : "transparent",
+    color: active ? "#e8eaf0" : "rgba(255,255,255,0.3)",
+    transition: "background 0.15s, color 0.15s",
+  });
+
+  const pieData = chart.data.map((d) => ({
+    name: String(d[chart.xKey]),
+    value: Number(d[chart.yKeys[0]]) || 0,
+  }));
+
   return (
-    <div style={{ marginBottom: 24 }}>
-      <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.3)", margin: "0 0 10px" }}>
-        {title}
-      </p>
-      <ResponsiveContainer width="100%" height={200}>
-        {chart.type === "bar" ? (
+    <div style={{ marginBottom: 28 }}>
+      {/* Title + type switcher */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.3)", margin: 0 }}>
+          {title}
+        </p>
+        <div style={{ display: "flex", gap: 1, background: "rgba(255,255,255,0.05)", borderRadius: 6, padding: 2 }}>
+          {CHART_TYPES.map(({ value, label }) => (
+            <button key={value} onClick={() => setChartType(value)} style={btnStyle(chartType === value)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <ResponsiveContainer width="100%" height={220}>
+        {chartType === "bar" ? (
           <BarChart {...common} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
             <CartesianGrid {...gridProps} />
             <XAxis dataKey={chart.xKey} {...axisProps} tickFormatter={(v) => String(v).slice(0, 10)} />
             <YAxis {...axisProps} tickFormatter={fmt} width={45} />
-            <Tooltip {...tooltipStyle} formatter={(v: number) => fmt(v)} />
+            <Tooltip {...tooltipStyle} formatter={(v: number | undefined) => fmt(v ?? 0)} />
             {chart.yKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }} />}
             {chart.yKeys.map((k, i) => (
               <Bar key={k} dataKey={k} fill={COLORS[i % COLORS.length]} radius={[3, 3, 0, 0]} maxBarSize={40} />
             ))}
           </BarChart>
-        ) : (
+        ) : chartType === "line" ? (
           <LineChart {...common} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
             <CartesianGrid {...gridProps} />
             <XAxis dataKey={chart.xKey} {...axisProps} tickFormatter={(v) => String(v).slice(0, 10)} />
             <YAxis {...axisProps} tickFormatter={fmt} width={45} />
-            <Tooltip {...tooltipStyle} formatter={(v: number) => fmt(v)} />
+            <Tooltip {...tooltipStyle} formatter={(v: number | undefined) => fmt(v ?? 0)} />
             {chart.yKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }} />}
             {chart.yKeys.map((k, i) => (
               <Line key={k} type="monotone" dataKey={k} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} />
             ))}
           </LineChart>
+        ) : chartType === "area" ? (
+          <AreaChart {...common} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+            <defs>
+              {chart.yKeys.map((k, i) => (
+                <linearGradient key={k} id={`area-grad-${k}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0} />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid {...gridProps} />
+            <XAxis dataKey={chart.xKey} {...axisProps} tickFormatter={(v) => String(v).slice(0, 10)} />
+            <YAxis {...axisProps} tickFormatter={fmt} width={45} />
+            <Tooltip {...tooltipStyle} formatter={(v: number | undefined) => fmt(v ?? 0)} />
+            {chart.yKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }} />}
+            {chart.yKeys.map((k, i) => (
+              <Area key={k} type="monotone" dataKey={k} stroke={COLORS[i % COLORS.length]} strokeWidth={2} fill={`url(#area-grad-${k})`} />
+            ))}
+          </AreaChart>
+        ) : (
+          <PieChart>
+            <Pie
+              data={pieData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              outerRadius={85}
+              label={({ name, percent }: { name: string; percent: number }) =>
+                `${String(name).slice(0, 10)} ${(percent * 100).toFixed(0)}%`
+              }
+              labelLine={false}
+            >
+              {pieData.map((_, i) => (
+                <Cell key={i} fill={COLORS[i % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={tooltipStyle.contentStyle}
+              formatter={(v: number | undefined) => fmt(v ?? 0)}
+            />
+          </PieChart>
         )}
       </ResponsiveContainer>
     </div>
@@ -269,7 +346,7 @@ function ComparisonChart({ cmp, primary }: { cmp: ComparisonData; primary: strin
           <CartesianGrid {...gridProps} />
           <XAxis dataKey="name" {...axisProps} tickFormatter={(v) => String(v).slice(0, 10)} />
           <YAxis {...axisProps} tickFormatter={fmt} width={45} />
-          <Tooltip {...tooltipStyle} formatter={(v: number) => fmt(v)} />
+          <Tooltip {...tooltipStyle} formatter={(v: number | undefined) => fmt(v ?? 0)} />
           <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }} />
           <Bar dataKey={cmp.keys[0]} fill={primary} radius={[3, 3, 0, 0]} maxBarSize={30} />
           <Bar dataKey={cmp.keys[1]} fill={ACCENT} radius={[3, 3, 0, 0]} maxBarSize={30} />
