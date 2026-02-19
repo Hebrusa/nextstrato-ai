@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import ConfigPanel, { Config, DEFAULT_CONFIG } from "./ConfigPanel";
 import DataVizModal, { DocFile } from "./DataVizModal";
+import FinancialDashboard from "./FinancialDashboard";
 import KnowledgeBasePanel, { KBDoc } from "./KnowledgeBasePanel";
 
 /* ── Color helpers ── */
@@ -73,7 +74,7 @@ Réponds en français, de manière précise, chiffrée et directement actionnabl
       "Tu es Strato, un assistant IA expert en développement commercial pour NextStrato. Tu accompagnes les Directeurs Commerciaux dans leurs missions : stratégie de vente, gestion du pipeline, acquisition et fidélisation clients, pilotage des équipes et prévisions de revenus. Tu proposes des analyses de performance, des stratégies de croissance et des outils de pilotage commercial. Réponds en français, de manière dynamique, orientée résultats et professionnelle.",
     suggestions: [
       "Analyse mon pipeline de ventes",
-      "Stratégie d'acquisition nouveaux clients",
+      "Préparer RDV prospect / client",
       "Prévisions commerciales Q4",
       "Optimiser mes offres et propositions",
     ],
@@ -209,6 +210,7 @@ export default function ChatInterface() {
   const [isParsingDoc, setIsParsingDoc] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showDataViz, setShowDataViz] = useState(false);
+  const [showFinancialDashboard, setShowFinancialDashboard] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -307,7 +309,7 @@ export default function ChatInterface() {
       if (!res.ok || data.error) {
         setUploadError(data.error ?? `Erreur ${res.status} lors du traitement du fichier.`);
       } else if (data.text) {
-        setDocuments((prev) => [...prev, { name: data.name ?? file.name, text: data.text! }].slice(-2));
+        setDocuments((prev) => [...prev, { name: data.name ?? file.name, text: data.text! }].slice(-5));
       } else {
         setUploadError("Le fichier semble vide ou illisible.");
       }
@@ -456,10 +458,11 @@ ${rows}
 
       {showConfig && <ConfigPanel config={config} onChange={updateConfig} onClose={() => setShowConfig(false)} onReset={resetConfig} />}
       {showDataViz && documents.length >= 1 && <DataVizModal documents={documents} primary={primary} onClose={() => setShowDataViz(false)} />}
+      {showFinancialDashboard && documents.length >= 1 && <FinancialDashboard documents={documents} primary={primary} onClose={() => setShowFinancialDashboard(false)} />}
       {showKB && <KnowledgeBasePanel docs={knowledgeBase} primary={primary} onAdd={addKBDoc} onRemove={removeKBDoc} onClose={() => setShowKB(false)} />}
 
       {/* ════ SIDEBAR ════ */}
-      <aside style={{ width: 232, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid #D4DCFB", background: "#EEF2FF", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: "rgba(79,110,247,0.15) transparent" }}>
+      <aside style={{ width: 232, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid #D4DCFB", background: "#577cf3", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: "rgba(79,110,247,0.15) transparent" }}>
 
         <div style={{ padding: "12px 8px 4px" }}>
           <button
@@ -563,6 +566,19 @@ ${rows}
               📊 <span>Analyser</span>
             </button>
 
+            {activeAgent?.id === "daf" && (
+              <button
+                onClick={() => documents.length >= 1 && setShowFinancialDashboard(true)}
+                title={documents.length === 0 ? "Chargez un fichier pour accéder au dashboard" : "Dashboard financier DAF"}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                style={{ background: documents.length >= 1 ? "#8B5CF6" : "#F5F5FA", border: `1px solid ${documents.length >= 1 ? "#8B5CF6" : "#E4E4EF"}`, color: documents.length >= 1 ? "#fff" : "#71718A", cursor: documents.length >= 1 ? "pointer" : "not-allowed", transition: "all 0.15s", opacity: documents.length >= 1 ? 1 : 0.7 }}
+                onMouseEnter={(e) => { if (documents.length >= 1) e.currentTarget.style.opacity = "0.85"; }}
+                onMouseLeave={(e) => { if (documents.length >= 1) e.currentTarget.style.opacity = "1"; }}
+              >
+                💼 <span>Dashboard DAF</span>
+              </button>
+            )}
+
             <button
               onClick={() => setShowKB((v) => !v)}
               title="Base de connaissances"
@@ -648,20 +664,37 @@ ${rows}
             )}
             {documents.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 mb-2 px-1">
-                {documents.map((doc, i) => (
-                  <span key={i} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
-                    style={{ background: i === 0 ? hexToRgba(primary, 0.08) : "rgba(6,182,212,0.08)", border: `1px solid ${i === 0 ? hexToRgba(primary, 0.25) : "rgba(6,182,212,0.25)"}`, color: i === 0 ? primary : "#0ea5e9" }}>
-                    📎
-                    <span style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</span>
-                    <button onClick={() => removeDocument(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", opacity: 0.6, padding: 0, lineHeight: 1, fontSize: 11 }}>✕</button>
-                  </span>
-                ))}
+                {documents.map((doc, i) => {
+                  const BADGE = [
+                    { bg: hexToRgba(primary, 0.08), border: hexToRgba(primary, 0.25), color: primary },
+                    { bg: "rgba(6,182,212,0.08)", border: "rgba(6,182,212,0.25)", color: "#0ea5e9" },
+                    { bg: "rgba(139,92,246,0.08)", border: "rgba(139,92,246,0.25)", color: "#8B5CF6" },
+                    { bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.25)", color: "#059669" },
+                    { bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.25)", color: "#D97706" },
+                  ];
+                  const b = BADGE[i % BADGE.length];
+                  return (
+                    <span key={i} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
+                      style={{ background: b.bg, border: `1px solid ${b.border}`, color: b.color }}>
+                      📎
+                      <span style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</span>
+                      <button onClick={() => removeDocument(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", opacity: 0.6, padding: 0, lineHeight: 1, fontSize: 11 }}>✕</button>
+                    </span>
+                  );
+                })}
                 {documents.length >= 1 && (
                   <button onClick={() => setShowDataViz(true)} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
                     style={{ background: hexToRgba(primary, 0.1), border: `1px solid ${hexToRgba(primary, 0.35)}`, color: primary, cursor: "pointer" }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = hexToRgba(primary, 0.18))}
                     onMouseLeave={(e) => (e.currentTarget.style.background = hexToRgba(primary, 0.1))}
                   >📊 Analyser</button>
+                )}
+                {activeAgent?.id === "daf" && documents.length >= 1 && (
+                  <button onClick={() => setShowFinancialDashboard(true)} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
+                    style={{ background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.35)", color: "#8B5CF6", cursor: "pointer" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(139,92,246,0.18)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(139,92,246,0.1)")}
+                  >💼 Dashboard DAF</button>
                 )}
               </div>
             )}
@@ -673,9 +706,9 @@ ${rows}
             >
               <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStreaming || isParsingDoc}
                 className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
-                style={{ color: documents.length > 0 ? primary : "#71718A", background: documents.length > 0 ? hexToRgba(primary, 0.08) : "transparent", opacity: isStreaming || isParsingDoc || documents.length >= 2 ? 0.4 : 1, cursor: isStreaming || isParsingDoc || documents.length >= 2 ? "not-allowed" : "pointer" }}
-                title={documents.length >= 2 ? "2 fichiers maximum" : "Joindre un fichier PDF, TXT ou CSV"}
-                onMouseEnter={(e) => { if (!isStreaming && !isParsingDoc && documents.length < 2) { e.currentTarget.style.color = "#0F0F18"; e.currentTarget.style.background = "#E4E4EF"; } }}
+                style={{ color: documents.length > 0 ? primary : "#71718A", background: documents.length > 0 ? hexToRgba(primary, 0.08) : "transparent", opacity: isStreaming || isParsingDoc || documents.length >= 5 ? 0.4 : 1, cursor: isStreaming || isParsingDoc || documents.length >= 5 ? "not-allowed" : "pointer" }}
+                title={documents.length >= 5 ? "5 fichiers maximum" : "Joindre un fichier PDF, TXT ou CSV"}
+                onMouseEnter={(e) => { if (!isStreaming && !isParsingDoc && documents.length < 5) { e.currentTarget.style.color = "#0F0F18"; e.currentTarget.style.background = "#E4E4EF"; } }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = documents.length > 0 ? primary : "#71718A"; e.currentTarget.style.background = documents.length > 0 ? hexToRgba(primary, 0.08) : "transparent"; }}
               >
                 {isParsingDoc ? <IconSpinner className="w-4 h-4" /> : <IconPaperclip className="w-4 h-4" />}

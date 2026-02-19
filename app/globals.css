@@ -45,7 +45,7 @@ body {
 /* Card hover */
 .card-hover {
   transition: all 0.25s ease;
-  border: 1px solid #E4E4EF;
+  border: 1px solid #ffffff;
 }
 .card-hover:hover {
   border-color: rgba(79, 110, 247, 0.35);
