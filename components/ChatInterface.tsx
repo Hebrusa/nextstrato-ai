@@ -175,16 +175,22 @@ export default function ChatInterface() {
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/parse-document", { method: "POST", body: formData });
-      const data = await res.json();
-      if (data.error) {
-        setUploadError(data.error);
+      let data: { text?: string; name?: string; error?: string };
+      try {
+        data = await res.json();
+      } catch {
+        setUploadError(`Erreur serveur (${res.status}) — réponse invalide. Réessayez.`);
+        return;
+      }
+      if (!res.ok || data.error) {
+        setUploadError(data.error ?? `Erreur ${res.status} lors du traitement du fichier.`);
       } else if (data.text) {
-        setDocuments((prev) => [...prev, { name: data.name, text: data.text }].slice(-2));
+        setDocuments((prev) => [...prev, { name: data.name ?? file.name, text: data.text! }].slice(-2));
       } else {
         setUploadError("Le fichier semble vide ou illisible.");
       }
     } catch {
-      setUploadError("Erreur réseau lors du chargement du fichier.");
+      setUploadError("Impossible de joindre le serveur. Vérifiez votre connexion.");
     } finally {
       setIsParsingDoc(false);
       e.target.value = "";

@@ -312,8 +312,8 @@ function SingleChart({ chart, primary, title }: { chart: ChartData; primary: str
               cx="50%"
               cy="50%"
               outerRadius={85}
-              label={({ name, percent }: { name: string; percent: number }) =>
-                `${String(name).slice(0, 10)} ${(percent * 100).toFixed(0)}%`
+              label={({ name, percent }: { name?: string; percent?: number }) =>
+                `${String(name ?? "").slice(0, 10)} ${((percent ?? 0) * 100).toFixed(0)}%`
               }
               labelLine={false}
             >
