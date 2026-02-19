@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import ConfigPanel, { Config, DEFAULT_CONFIG } from "./ConfigPanel";
 import DataVizModal, { DocFile } from "./DataVizModal";
+import KnowledgeBasePanel, { KBDoc } from "./KnowledgeBasePanel";
 
 /* ── Color helpers ── */
 function hexToRgba(hex: string, alpha: number): string {
@@ -108,6 +109,7 @@ type Conversation = {
 
 const LS_KEY = "nextstrato-config";
 const LS_HISTORY_KEY = "nextstrato-conversations";
+const LS_KB_KEY = "nextstrato-kb";
 const MAX_SAVED_CONVERSATIONS = 30;
 
 function formatRelativeDate(ts: number): string {
@@ -163,6 +165,32 @@ export default function ChatInterface() {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const currentConversationIdRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
+
+  /* ── Knowledge Base ── */
+  const [knowledgeBase, setKnowledgeBase] = useState<KBDoc[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = localStorage.getItem(LS_KB_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
+  const [showKB, setShowKB] = useState(false);
+
+  const addKBDoc = useCallback((doc: KBDoc) => {
+    setKnowledgeBase((prev) => {
+      const updated = [...prev, doc];
+      try { localStorage.setItem(LS_KB_KEY, JSON.stringify(updated)); } catch { /* noop */ }
+      return updated;
+    });
+  }, []);
+
+  const removeKBDoc = useCallback((id: string) => {
+    setKnowledgeBase((prev) => {
+      const updated = prev.filter((d) => d.id !== id);
+      try { localStorage.setItem(LS_KB_KEY, JSON.stringify(updated)); } catch { /* noop */ }
+      return updated;
+    });
+  }, []);
 
   /* ── UI state ── */
   const [showConfig, setShowConfig] = useState(false);
@@ -311,12 +339,20 @@ export default function ChatInterface() {
 
     const basePrompt = activeAgentRef.current?.systemPrompt ?? configRef.current.systemPrompt;
     const docs = documents;
+    const kbDocs = knowledgeBase;
+
+    const kbContext = kbDocs.length > 0
+      ? kbDocs.map((d, i) => `Document ${i + 1} — "${d.name}" :\n\n${d.text}`).join("\n\n---\n\n")
+      : null;
     const docContext = docs.length > 0
       ? docs.map((d, i) => `Document ${i + 1} — "${d.name}" :\n\n${d.text}`).join("\n\n---\n\n")
       : null;
-    const effectiveSystemPrompt = docContext
-      ? `${basePrompt}\n\nL'utilisateur a partagé les documents suivants :\n\n${docContext}\n\nUtilise ces documents pour répondre aux questions si c'est pertinent.`
-      : basePrompt;
+
+    const effectiveSystemPrompt = [
+      basePrompt,
+      kbContext ? `\n\nBase de connaissances (documents permanents disponibles) :\n\n${kbContext}\n\nUtilise ces documents comme référence fiable pour répondre aux questions.` : null,
+      docContext ? `\n\nDocuments joints à cette conversation :\n\n${docContext}\n\nUtilise ces documents pour répondre aux questions si c'est pertinent.` : null,
+    ].filter(Boolean).join("");
 
     setMessages((prev) => [...prev, userMessage, assistantMessage]);
     setInput("");
@@ -359,7 +395,7 @@ export default function ChatInterface() {
       // Save conversation after response completes
       saveConversation(messagesRef.current);
     }
-  }, [messages, isStreaming, documents, saveConversation]);
+  }, [messages, isStreaming, documents, knowledgeBase, saveConversation]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
@@ -399,6 +435,17 @@ export default function ChatInterface() {
       {/* ── DataViz Modal ── */}
       {showDataViz && documents.length >= 1 && (
         <DataVizModal documents={documents} primary={primary} onClose={() => setShowDataViz(false)} />
+      )}
+
+      {/* ── Knowledge Base Panel ── */}
+      {showKB && (
+        <KnowledgeBasePanel
+          docs={knowledgeBase}
+          primary={primary}
+          onAdd={addKBDoc}
+          onRemove={removeKBDoc}
+          onClose={() => setShowKB(false)}
+        />
       )}
 
       {/* ════════════════════════════════════════
@@ -653,6 +700,44 @@ export default function ChatInterface() {
               onMouseLeave={(e) => { if (documents.length >= 1) e.currentTarget.style.cssText += "opacity:1;"; }}
             >
               📊 <span>Analyser</span>
+            </button>
+
+            {/* Knowledge Base button */}
+            <button
+              onClick={() => setShowKB((v) => !v)}
+              title="Base de connaissances"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+              style={{
+                background: showKB
+                  ? hexToRgba(primary, 0.15)
+                  : knowledgeBase.length > 0
+                  ? hexToRgba(primary, 0.08)
+                  : "rgba(255,255,255,0.07)",
+                border: `1px solid ${showKB || knowledgeBase.length > 0 ? hexToRgba(primary, 0.3) : "rgba(255,255,255,0.12)"}`,
+                color: showKB || knowledgeBase.length > 0 ? lightPrimary : "rgba(255,255,255,0.4)",
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.15)};border-color:${hexToRgba(primary, 0.4)};color:${lightPrimary};`)}
+              onMouseLeave={(e) => (e.currentTarget.style.cssText += showKB || knowledgeBase.length > 0
+                ? `background:${hexToRgba(primary, 0.08)};border-color:${hexToRgba(primary, 0.3)};color:${lightPrimary};`
+                : "background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.12);color:rgba(255,255,255,0.4);")}
+            >
+              📚
+              <span>Base</span>
+              {knowledgeBase.length > 0 && (
+                <span style={{
+                  background: primary,
+                  color: "#fff",
+                  borderRadius: "999px",
+                  padding: "0 5px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  lineHeight: "16px",
+                }}>
+                  {knowledgeBase.length}
+                </span>
+              )}
             </button>
 
             {/* Config button */}
