@@ -19,7 +19,7 @@ function hexToRgba(hex: string, alpha: number) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-const ACCENT = "#06b6d4"; // second series color
+const ACCENT = "#8B5CF6"; // second series color
 
 /* ════════════════════════════════
    CSV parsing
@@ -168,12 +168,12 @@ function fmt(v: number) {
 ════════════════════════════════ */
 function SimpleMarkdown({ text }: { text: string }) {
   return (
-    <div style={{ fontSize: 13, lineHeight: 1.65, color: "#d4d8f0" }}>
+    <div style={{ fontSize: 13, lineHeight: 1.65, color: "#71718A" }}>
       {text.split("\n").map((line, i) => {
         if (/^#{1,3} /.test(line))
-          return <p key={i} style={{ fontWeight: 700, color: "#e8eaf0", margin: "14px 0 4px", fontSize: 13 }}>{line.replace(/^#+\s/, "")}</p>;
+          return <p key={i} style={{ fontWeight: 700, color: "#0F0F18", margin: "14px 0 4px", fontSize: 13 }}>{line.replace(/^#+\s/, "")}</p>;
         if (/^\*\*.*\*\*$/.test(line.trim()))
-          return <p key={i} style={{ fontWeight: 600, color: "#e8eaf0", margin: "10px 0 2px" }}>{line.trim().slice(2, -2)}</p>;
+          return <p key={i} style={{ fontWeight: 600, color: "#0F0F18", margin: "10px 0 2px" }}>{line.trim().slice(2, -2)}</p>;
         if (line.startsWith("- ") || line.startsWith("• "))
           return <p key={i} style={{ margin: "2px 0", paddingLeft: 12 }}>· {line.slice(2)}</p>;
         if (/^\d+\. /.test(line))
@@ -185,7 +185,7 @@ function SimpleMarkdown({ text }: { text: string }) {
           return (
             <p key={i} style={{ margin: "2px 0" }}>
               {parts.map((p, j) =>
-                p.startsWith("**") ? <strong key={j}>{p.slice(2, -2)}</strong> : p
+                p.startsWith("**") ? <strong key={j} style={{ color: "#0F0F18" }}>{p.slice(2, -2)}</strong> : p
               )}
             </p>
           );
@@ -200,20 +200,20 @@ function SimpleMarkdown({ text }: { text: string }) {
 ════════════════════════════════ */
 const tooltipStyle = {
   contentStyle: {
-    background: "#13141d",
-    border: "1px solid rgba(255,255,255,0.1)",
+    background: "#FFFFFF",
+    border: "1px solid #E4E4EF",
     borderRadius: 8,
-    color: "#e8eaf0",
+    color: "#0F0F18",
     fontSize: 12,
   },
-  labelStyle: { color: "rgba(255,255,255,0.6)", marginBottom: 4 },
+  labelStyle: { color: "rgba(0,0,0,0.5)", marginBottom: 4 },
 };
 const axisProps = {
-  tick: { fill: "rgba(255,255,255,0.35)", fontSize: 11 },
+  tick: { fill: "rgba(0,0,0,0.4)", fontSize: 11 },
   axisLine: false as const,
   tickLine: false as const,
 };
-const gridProps = { stroke: "rgba(255,255,255,0.05)", strokeDasharray: "3 3" };
+const gridProps = { stroke: "rgba(0,0,0,0.06)", strokeDasharray: "3 3" };
 
 /* ════════════════════════════════
    SingleChart
@@ -235,8 +235,8 @@ function SingleChart({ chart, primary, title }: { chart: ChartData; primary: str
   const btnStyle = (active: boolean): React.CSSProperties => ({
     padding: "3px 10px", borderRadius: 4, border: "none", cursor: "pointer",
     fontSize: 11, fontWeight: 500,
-    background: active ? "rgba(255,255,255,0.12)" : "transparent",
-    color: active ? "#e8eaf0" : "rgba(255,255,255,0.3)",
+    background: active ? hexToRgba(primary, 0.1) : "transparent",
+    color: active ? primary : "#71718A",
     transition: "background 0.15s, color 0.15s",
   });
 
@@ -249,10 +249,10 @@ function SingleChart({ chart, primary, title }: { chart: ChartData; primary: str
     <div style={{ marginBottom: 28 }}>
       {/* Title + type switcher */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.3)", margin: 0 }}>
+        <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "#71718A", margin: 0 }}>
           {title}
         </p>
-        <div style={{ display: "flex", gap: 1, background: "rgba(255,255,255,0.05)", borderRadius: 6, padding: 2 }}>
+        <div style={{ display: "flex", gap: 1, background: "#F5F5FA", borderRadius: 6, padding: 2 }}>
           {CHART_TYPES.map(({ value, label }) => (
             <button key={value} onClick={() => setChartType(value)} style={btnStyle(chartType === value)}>
               {label}
@@ -268,7 +268,7 @@ function SingleChart({ chart, primary, title }: { chart: ChartData; primary: str
             <XAxis dataKey={chart.xKey} {...axisProps} tickFormatter={(v) => String(v).slice(0, 10)} />
             <YAxis {...axisProps} tickFormatter={fmt} width={45} />
             <Tooltip {...tooltipStyle} formatter={(v: number | undefined) => fmt(v ?? 0)} />
-            {chart.yKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }} />}
+            {chart.yKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: "#71718A" }} />}
             {chart.yKeys.map((k, i) => (
               <Bar key={k} dataKey={k} fill={COLORS[i % COLORS.length]} radius={[3, 3, 0, 0]} maxBarSize={40} />
             ))}
@@ -279,7 +279,7 @@ function SingleChart({ chart, primary, title }: { chart: ChartData; primary: str
             <XAxis dataKey={chart.xKey} {...axisProps} tickFormatter={(v) => String(v).slice(0, 10)} />
             <YAxis {...axisProps} tickFormatter={fmt} width={45} />
             <Tooltip {...tooltipStyle} formatter={(v: number | undefined) => fmt(v ?? 0)} />
-            {chart.yKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }} />}
+            {chart.yKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: "#71718A" }} />}
             {chart.yKeys.map((k, i) => (
               <Line key={k} type="monotone" dataKey={k} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} />
             ))}
@@ -298,7 +298,7 @@ function SingleChart({ chart, primary, title }: { chart: ChartData; primary: str
             <XAxis dataKey={chart.xKey} {...axisProps} tickFormatter={(v) => String(v).slice(0, 10)} />
             <YAxis {...axisProps} tickFormatter={fmt} width={45} />
             <Tooltip {...tooltipStyle} formatter={(v: number | undefined) => fmt(v ?? 0)} />
-            {chart.yKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }} />}
+            {chart.yKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: "#71718A" }} />}
             {chart.yKeys.map((k, i) => (
               <Area key={k} type="monotone" dataKey={k} stroke={COLORS[i % COLORS.length]} strokeWidth={2} fill={`url(#area-grad-${k})`} />
             ))}
@@ -338,7 +338,7 @@ function SingleChart({ chart, primary, title }: { chart: ChartData; primary: str
 function ComparisonChart({ cmp, primary }: { cmp: ComparisonData; primary: string }) {
   return (
     <div style={{ marginBottom: 24 }}>
-      <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.3)", margin: "0 0 10px" }}>
+      <p style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "#71718A", margin: "0 0 10px" }}>
         Comparaison — {cmp.metric}
       </p>
       <ResponsiveContainer width="100%" height={200}>
@@ -347,7 +347,7 @@ function ComparisonChart({ cmp, primary }: { cmp: ComparisonData; primary: strin
           <XAxis dataKey="name" {...axisProps} tickFormatter={(v) => String(v).slice(0, 10)} />
           <YAxis {...axisProps} tickFormatter={fmt} width={45} />
           <Tooltip {...tooltipStyle} formatter={(v: number | undefined) => fmt(v ?? 0)} />
-          <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }} />
+          <Legend wrapperStyle={{ fontSize: 11, color: "#71718A" }} />
           <Bar dataKey={cmp.keys[0]} fill={primary} radius={[3, 3, 0, 0]} maxBarSize={30} />
           <Bar dataKey={cmp.keys[1]} fill={ACCENT} radius={[3, 3, 0, 0]} maxBarSize={30} />
         </BarChart>
@@ -483,7 +483,7 @@ Réponds en français, de manière structurée et professionnelle.`;
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 100,
-        background: "#090a0f", display: "flex", flexDirection: "column",
+        background: "#FFFFFF", display: "flex", flexDirection: "column",
       }}
     >
       {/* ── Header ── */}
@@ -491,13 +491,13 @@ Réponds en français, de manière structurée et professionnelle.`;
         style={{
           flexShrink: 0, display: "flex", alignItems: "center", gap: 12,
           padding: "14px 24px",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
-          background: "rgba(10,11,18,0.9)",
+          borderBottom: "1px solid #E4E4EF",
+          background: "rgba(255,255,255,0.92)",
         }}
       >
         <span style={{ fontSize: 18 }}>📊</span>
         <div style={{ flex: 1 }}>
-          <p style={{ color: "#e8eaf0", fontWeight: 600, fontSize: 15, margin: 0 }}>
+          <p style={{ color: "#0F0F18", fontWeight: 600, fontSize: 15, margin: 0 }}>
             {documents.length === 1 ? "Analyse du fichier" : "Analyse comparative"}
           </p>
           <div style={{ display: "flex", gap: 8, marginTop: 3 }}>
@@ -506,9 +506,9 @@ Réponds en français, de manière structurée et professionnelle.`;
                 key={i}
                 style={{
                   fontSize: 11, padding: "1px 8px", borderRadius: 999,
-                  background: i === 0 ? hexToRgba(primary, 0.15) : "rgba(6,182,212,0.12)",
+                  background: i === 0 ? hexToRgba(primary, 0.1) : hexToRgba(ACCENT, 0.1),
                   color: i === 0 ? primary : ACCENT,
-                  border: `1px solid ${i === 0 ? hexToRgba(primary, 0.3) : "rgba(6,182,212,0.25)"}`,
+                  border: `1px solid ${i === 0 ? hexToRgba(primary, 0.25) : hexToRgba(ACCENT, 0.25)}`,
                 }}
               >
                 {d.name}
@@ -523,8 +523,8 @@ Réponds en français, de manière structurée et professionnelle.`;
           disabled={isAnalyzing}
           style={{
             padding: "8px 16px", borderRadius: 8, border: "none", cursor: isAnalyzing ? "not-allowed" : "pointer",
-            background: isAnalyzing ? "rgba(255,255,255,0.06)" : primary,
-            color: isAnalyzing ? "rgba(255,255,255,0.4)" : "#fff",
+            background: isAnalyzing ? "#F5F5FA" : primary,
+            color: isAnalyzing ? "#71718A" : "#fff",
             fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6,
           }}
         >
@@ -539,8 +539,8 @@ Réponds en français, de manière structurée et professionnelle.`;
         <button
           onClick={onClose}
           style={{
-            width: 32, height: 32, borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)",
-            background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.45)",
+            width: 32, height: 32, borderRadius: 8, border: "1px solid #E4E4EF",
+            background: "#F5F5FA", color: "#71718A",
             cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
           }}
         >✕</button>
@@ -553,11 +553,11 @@ Réponds en français, de manière structurée et professionnelle.`;
         <div
           style={{
             width: "55%", flexShrink: 0, overflowY: "auto", padding: "24px",
-            borderRight: "1px solid rgba(255,255,255,0.06)",
-            scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.08) transparent",
+            borderRight: "1px solid #E4E4EF",
+            scrollbarWidth: "thin", scrollbarColor: "rgba(0,0,0,0.08) transparent",
           }}
         >
-          <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.25)", margin: "0 0 20px" }}>
+          <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#71718A", margin: "0 0 20px" }}>
             Visualisation
           </p>
 
@@ -569,7 +569,7 @@ Réponds en français, de manière structurée et professionnelle.`;
               }}
             >
               <span style={{ fontSize: 32 }}>📄</span>
-              <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13, textAlign: "center" }}>
+              <p style={{ color: "#71718A", fontSize: 13, textAlign: "center" }}>
                 Les graphiques sont disponibles pour les fichiers CSV.<br />
                 Lance l&apos;analyse IA pour comparer les contenus textuels.
               </p>
@@ -592,7 +592,7 @@ Réponds en français, de manière structurée et professionnelle.`;
               )}
               {cmp && <ComparisonChart cmp={cmp} primary={primary} />}
               {!cmp && csvDocs.length === 2 && (
-                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", textAlign: "center", marginTop: 8 }}>
+                <p style={{ fontSize: 12, color: "#71718A", textAlign: "center", marginTop: 8 }}>
                   Aucune colonne commune trouvée pour la comparaison directe.
                 </p>
               )}
@@ -604,10 +604,10 @@ Réponds en français, de manière structurée et professionnelle.`;
         <div
           style={{
             flex: 1, overflowY: "auto", padding: "24px",
-            scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.08) transparent",
+            scrollbarWidth: "thin", scrollbarColor: "rgba(0,0,0,0.08) transparent",
           }}
         >
-          <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.25)", margin: "0 0 20px" }}>
+          <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#71718A", margin: "0 0 20px" }}>
             Insights IA
           </p>
 
@@ -619,12 +619,12 @@ Réponds en français, de manière structurée et professionnelle.`;
               }}
             >
               <span style={{ fontSize: 40 }}>🤖</span>
-              <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, maxWidth: 260 }}>
+              <p style={{ color: "#71718A", fontSize: 13, maxWidth: 260 }}>
                 Clique sur &quot;Lancer l&apos;analyse IA&quot; pour obtenir une comparaison détaillée, des statistiques clés et des recommandations.
               </p>
             </div>
           ) : isAnalyzing && insights === "" ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "rgba(255,255,255,0.4)", fontSize: 13 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#71718A", fontSize: 13 }}>
               <IconSpinner />Analyse en cours…
             </div>
           ) : (

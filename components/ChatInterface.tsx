@@ -12,12 +12,6 @@ function hexToRgba(hex: string, alpha: number): string {
   const b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
-function lightenColor(hex: string): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgb(${Math.round(r + (255 - r) * 0.52)},${Math.round(g + (255 - g) * 0.52)},${Math.round(b + (255 - b) * 0.52)})`;
-}
 
 /* ── Agents ── */
 type Agent = {
@@ -209,7 +203,6 @@ export default function ChatInterface() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const streamingIdRef = useRef<string | null>(null);
 
-  /* Keep messagesRef in sync */
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   useEffect(() => {
@@ -226,21 +219,15 @@ export default function ChatInterface() {
 
   /* ── Colors ── */
   const primary = config.primaryColor;
-  const lightPrimary = lightenColor(primary);
 
-  /* ── Save conversation to localStorage ── */
+  /* ── Save conversation ── */
   const saveConversation = useCallback((msgs: Message[]) => {
     const firstUserMsg = msgs.find((m) => m.role === "user");
-    if (!firstUserMsg) return; // nothing to save
-
-    const title =
-      firstUserMsg.content.slice(0, 40) +
-      (firstUserMsg.content.length > 40 ? "…" : "");
-
+    if (!firstUserMsg) return;
+    const title = firstUserMsg.content.slice(0, 40) + (firstUserMsg.content.length > 40 ? "…" : "");
     setConversations((prev) => {
       const existingId = currentConversationIdRef.current;
       let updated: Conversation[];
-
       if (existingId && prev.find((c) => c.id === existingId)) {
         updated = prev.map((c) =>
           c.id === existingId
@@ -260,7 +247,6 @@ export default function ChatInterface() {
         setCurrentConversationId(newConv.id);
         updated = [newConv, ...prev].slice(0, MAX_SAVED_CONVERSATIONS);
       }
-
       try { localStorage.setItem(LS_HISTORY_KEY, JSON.stringify(updated)); } catch { /* noop */ }
       return updated;
     });
@@ -304,12 +290,8 @@ export default function ChatInterface() {
       formData.append("file", file);
       const res = await fetch("/api/parse-document", { method: "POST", body: formData });
       let data: { text?: string; name?: string; error?: string };
-      try {
-        data = await res.json();
-      } catch {
-        setUploadError(`Erreur serveur (${res.status}) — réponse invalide. Réessayez.`);
-        return;
-      }
+      try { data = await res.json(); }
+      catch { setUploadError(`Erreur serveur (${res.status}) — réponse invalide. Réessayez.`); return; }
       if (!res.ok || data.error) {
         setUploadError(data.error ?? `Erreur ${res.status} lors du traitement du fichier.`);
       } else if (data.text) {
@@ -338,16 +320,12 @@ export default function ChatInterface() {
     const apiMessages = [...messages, userMessage].map(({ role, content }) => ({ role, content }));
 
     const basePrompt = activeAgentRef.current?.systemPrompt ?? configRef.current.systemPrompt;
-    const docs = documents;
-    const kbDocs = knowledgeBase;
-
-    const kbContext = kbDocs.length > 0
-      ? kbDocs.map((d, i) => `Document ${i + 1} — "${d.name}" :\n\n${d.text}`).join("\n\n---\n\n")
+    const kbContext = knowledgeBase.length > 0
+      ? knowledgeBase.map((d, i) => `Document ${i + 1} — "${d.name}" :\n\n${d.text}`).join("\n\n---\n\n")
       : null;
-    const docContext = docs.length > 0
-      ? docs.map((d, i) => `Document ${i + 1} — "${d.name}" :\n\n${d.text}`).join("\n\n---\n\n")
+    const docContext = documents.length > 0
+      ? documents.map((d, i) => `Document ${i + 1} — "${d.name}" :\n\n${d.text}`).join("\n\n---\n\n")
       : null;
-
     const effectiveSystemPrompt = [
       basePrompt,
       kbContext ? `\n\nBase de connaissances (documents permanents disponibles) :\n\n${kbContext}\n\nUtilise ces documents comme référence fiable pour répondre aux questions.` : null,
@@ -366,7 +344,6 @@ export default function ChatInterface() {
         body: JSON.stringify({ systemPrompt: effectiveSystemPrompt, messages: apiMessages }),
       });
       if (!res.ok || !res.body) throw new Error("Network error");
-
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -392,7 +369,6 @@ export default function ChatInterface() {
     } finally {
       setIsStreaming(false);
       streamingIdRef.current = null;
-      // Save conversation after response completes
       saveConversation(messagesRef.current);
     }
   }, [messages, isStreaming, documents, knowledgeBase, saveConversation]);
@@ -416,61 +392,43 @@ export default function ChatInterface() {
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   }, []);
 
-  const clearConversation = () => {
-    startNewConversation();
-  };
+  const clearConversation = () => { startNewConversation(); };
 
-  /* ── Download conversation as PDF ── */
+  /* ── Download as PDF ── */
   const downloadConversationPDF = useCallback(() => {
     const conversationMessages = messages.filter((m) => !(m.id === "init" && m.role === "assistant"));
     if (conversationMessages.length === 0) return;
-
     const agentName = activeAgent ? activeAgent.fullName : config.agentName;
-    const platformName = config.platformName;
     const dateStr = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
-
     const rows = conversationMessages.map((m) => {
       const isUser = m.role === "user";
-      return `
-        <div class="message ${isUser ? "user" : "assistant"}">
-          <div class="label">${isUser ? "Vous" : agentName}</div>
-          <div class="bubble">${m.content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>")}</div>
-        </div>`;
+      return `<div class="message ${isUser ? "user" : "assistant"}">
+        <div class="label">${isUser ? "Vous" : agentName}</div>
+        <div class="bubble">${m.content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>")}</div>
+      </div>`;
     }).join("");
-
-    const html = `<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8"/>
-  <title>${platformName} — Conversation</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #1a1a2e; background: #fff; padding: 32px 40px; }
-    header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 24px; }
-    header h1 { font-size: 18px; font-weight: 700; color: #111827; }
-    header span { font-size: 11px; color: #6b7280; }
-    .message { margin-bottom: 18px; }
-    .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
-    .user .label { color: #6366f1; text-align: right; }
-    .assistant .label { color: #374151; }
-    .bubble { padding: 12px 16px; border-radius: 12px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
-    .user .bubble { background: #6366f1; color: #fff; border-radius: 16px 4px 16px 16px; margin-left: auto; max-width: 80%; }
-    .assistant .bubble { background: #f3f4f6; color: #1f2937; border-radius: 4px 16px 16px 16px; max-width: 80%; border: 1px solid #e5e7eb; }
-    footer { margin-top: 32px; border-top: 1px solid #e5e7eb; padding-top: 12px; font-size: 10px; color: #9ca3af; text-align: center; }
-    @media print { body { padding: 20px 28px; } }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>${platformName}</h1>
-    <span>Exporté le ${dateStr}</span>
-  </header>
-  ${rows}
-  <footer>🔒 Données confidentielles — ${platformName}</footer>
-  <script>window.onload = function(){ window.print(); }<\/script>
-</body>
-</html>`;
-
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/>
+<title>${config.platformName} — Conversation</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #0F0F18; background: #fff; padding: 32px 40px; }
+header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #E4E4EF; padding-bottom: 16px; margin-bottom: 24px; }
+header h1 { font-size: 18px; font-weight: 700; color: #0F0F18; }
+header span { font-size: 11px; color: #71718A; }
+.message { margin-bottom: 18px; }
+.label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+.user .label { color: #4F6EF7; text-align: right; }
+.assistant .label { color: #71718A; }
+.bubble { padding: 12px 16px; border-radius: 12px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+.user .bubble { background: #4F6EF7; color: #fff; border-radius: 16px 4px 16px 16px; margin-left: auto; max-width: 80%; }
+.assistant .bubble { background: #F5F5FA; color: #0F0F18; border-radius: 4px 16px 16px 16px; max-width: 80%; border: 1px solid #E4E4EF; }
+footer { margin-top: 32px; border-top: 1px solid #E4E4EF; padding-top: 12px; font-size: 10px; color: #71718A; text-align: center; }
+</style></head><body>
+<header><h1>${config.platformName}</h1><span>Exporté le ${dateStr}</span></header>
+${rows}
+<footer>🔒 Données confidentielles — ${config.platformName}</footer>
+<script>window.onload = function(){ window.print(); }<\/script>
+</body></html>`;
     const win = window.open("", "_blank");
     if (!win) return;
     win.document.write(html);
@@ -482,120 +440,42 @@ export default function ChatInterface() {
   const displayAgentName = activeAgent ? activeAgent.name : config.agentName;
 
   return (
-    <div className="flex h-screen" style={{ background: config.backgroundColor, color: "#e8eaf0" }}>
+    <div className="flex h-screen" style={{ background: config.backgroundColor, color: "#0F0F18" }}>
 
-      {/* ── Config Panel ── */}
-      {showConfig && (
-        <ConfigPanel config={config} onChange={updateConfig} onClose={() => setShowConfig(false)} onReset={resetConfig} />
-      )}
+      {showConfig && <ConfigPanel config={config} onChange={updateConfig} onClose={() => setShowConfig(false)} onReset={resetConfig} />}
+      {showDataViz && documents.length >= 1 && <DataVizModal documents={documents} primary={primary} onClose={() => setShowDataViz(false)} />}
+      {showKB && <KnowledgeBasePanel docs={knowledgeBase} primary={primary} onAdd={addKBDoc} onRemove={removeKBDoc} onClose={() => setShowKB(false)} />}
 
-      {/* ── DataViz Modal ── */}
-      {showDataViz && documents.length >= 1 && (
-        <DataVizModal documents={documents} primary={primary} onClose={() => setShowDataViz(false)} />
-      )}
+      {/* ════ SIDEBAR ════ */}
+      <aside style={{ width: 232, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid #E4E4EF", background: "#F5F5FA", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: "rgba(0,0,0,0.08) transparent" }}>
 
-      {/* ── Knowledge Base Panel ── */}
-      {showKB && (
-        <KnowledgeBasePanel
-          docs={knowledgeBase}
-          primary={primary}
-          onAdd={addKBDoc}
-          onRemove={removeKBDoc}
-          onClose={() => setShowKB(false)}
-        />
-      )}
-
-      {/* ════════════════════════════════════════
-          SIDEBAR — Agents + Historique
-      ════════════════════════════════════════ */}
-      <aside
-        style={{
-          width: 232,
-          flexShrink: 0,
-          display: "flex",
-          flexDirection: "column",
-          borderRight: "1px solid rgba(255,255,255,0.06)",
-          background: "rgba(0,0,0,0.2)",
-          overflowY: "auto",
-          scrollbarWidth: "thin",
-          scrollbarColor: "rgba(255,255,255,0.06) transparent",
-        }}
-      >
-        {/* ── Nouvelle conversation ── */}
         <div style={{ padding: "12px 8px 4px" }}>
           <button
             onClick={startNewConversation}
-            style={{
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "9px 12px",
-              borderRadius: 10,
-              border: `1px solid ${hexToRgba(primary, 0.3)}`,
-              background: hexToRgba(primary, 0.08),
-              color: lightPrimary,
-              cursor: "pointer",
-              fontSize: 13,
-              fontWeight: 600,
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.16)};border-color:${hexToRgba(primary, 0.5)};`)}
-            onMouseLeave={(e) => (e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.08)};border-color:${hexToRgba(primary, 0.3)};`)}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 10, border: `1px solid ${hexToRgba(primary, 0.3)}`, background: hexToRgba(primary, 0.06), color: primary, cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = hexToRgba(primary, 0.12); e.currentTarget.style.borderColor = hexToRgba(primary, 0.5); }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = hexToRgba(primary, 0.06); e.currentTarget.style.borderColor = hexToRgba(primary, 0.3); }}
           >
-            <IconPlus className="w-4 h-4" />
-            Nouvelle conversation
+            <IconPlus className="w-4 h-4" /> Nouvelle conversation
           </button>
         </div>
 
-        {/* ── Agents section ── */}
         <div style={{ padding: "14px 14px 6px" }}>
-          <p style={{
-            fontSize: 10,
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.1em",
-            color: "rgba(255,255,255,0.25)",
-            margin: 0,
-          }}>
-            Agents spécialisés
-          </p>
+          <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#71718A", margin: 0 }}>Agents spécialisés</p>
         </div>
-
-        {/* Agent cards */}
         <div style={{ padding: "0 8px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
           {AGENTS.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              isSelected={activeAgent?.id === agent.id}
-              primary={primary}
-              lightPrimary={lightPrimary}
-              onClick={() => handleSelectAgent(agent)}
-            />
+            <AgentCard key={agent.id} agent={agent} isSelected={activeAgent?.id === agent.id} primary={primary} onClick={() => handleSelectAgent(agent)} />
           ))}
         </div>
 
-        {/* ── Historique section ── */}
         {conversations.length > 0 && (
           <>
-            <div style={{ margin: "0 8px", borderTop: "1px solid rgba(255,255,255,0.06)" }} />
+            <div style={{ margin: "0 8px", borderTop: "1px solid #E4E4EF" }} />
             <div style={{ padding: "14px 14px 6px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <p style={{
-                fontSize: 10,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                color: "rgba(255,255,255,0.25)",
-                margin: 0,
-              }}>
-                Historique
-              </p>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", fontWeight: 500 }}>
-                {conversations.length}
-              </span>
+              <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#71718A", margin: 0 }}>Historique</p>
+              <span style={{ fontSize: 10, color: "#71718A", fontWeight: 500 }}>{conversations.length}</span>
             </div>
-
             <div style={{ padding: "0 8px 16px", display: "flex", flexDirection: "column", gap: 2 }}>
               {conversations.map((conv) => {
                 const isActive = conv.id === currentConversationId;
@@ -603,48 +483,13 @@ export default function ChatInterface() {
                   <button
                     key={conv.id}
                     onClick={() => loadConversation(conv)}
-                    style={{
-                      width: "100%",
-                      padding: "9px 10px",
-                      borderRadius: 8,
-                      border: `1px solid ${isActive ? hexToRgba(primary, 0.3) : "rgba(255,255,255,0.04)"}`,
-                      borderLeft: `3px solid ${isActive ? primary : "transparent"}`,
-                      background: isActive ? hexToRgba(primary, 0.07) : "transparent",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      transition: "all 0.12s",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive)
-                        (e.currentTarget as HTMLElement).style.cssText += "background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.08);";
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive)
-                        (e.currentTarget as HTMLElement).style.cssText += "background:transparent;border-color:rgba(255,255,255,0.04);";
-                    }}
+                    style={{ width: "100%", padding: "9px 10px", borderRadius: 8, border: `1px solid ${isActive ? hexToRgba(primary, 0.3) : "#E4E4EF"}`, borderLeft: `3px solid ${isActive ? primary : "transparent"}`, background: isActive ? hexToRgba(primary, 0.06) : "transparent", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 6, transition: "all 0.12s" }}
+                    onMouseEnter={(e) => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.02)"; (e.currentTarget as HTMLElement).style.borderColor = "#C5C5D5"; } }}
+                    onMouseLeave={(e) => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.borderColor = "#E4E4EF"; } }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{
-                        fontSize: 12,
-                        fontWeight: 500,
-                        color: isActive ? "#fff" : "rgba(255,255,255,0.6)",
-                        margin: 0,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        lineHeight: 1.4,
-                      }}>
-                        {conv.title}
-                      </p>
-                      <p style={{
-                        fontSize: 10,
-                        color: "rgba(255,255,255,0.22)",
-                        margin: "2px 0 0",
-                        lineHeight: 1,
-                      }}>
+                      <p style={{ fontSize: 12, fontWeight: 500, color: isActive ? "#0F0F18" : "rgba(0,0,0,0.6)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>{conv.title}</p>
+                      <p style={{ fontSize: 10, color: "#71718A", margin: "2px 0 0", lineHeight: 1 }}>
                         {conv.agentId ? AGENTS.find((a) => a.id === conv.agentId)?.name + " · " : ""}
                         {formatRelativeDate(conv.updatedAt)}
                       </p>
@@ -652,22 +497,9 @@ export default function ChatInterface() {
                     <button
                       onClick={(e) => deleteConversation(conv.id, e)}
                       title="Supprimer"
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "rgba(255,255,255,0.2)",
-                        padding: "2px 3px",
-                        borderRadius: 4,
-                        lineHeight: 1,
-                        flexShrink: 0,
-                        fontSize: 13,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.cssText += "color:rgba(239,68,68,0.7);background:rgba(239,68,68,0.1);")}
-                      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.cssText += "color:rgba(255,255,255,0.2);background:none;")}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(0,0,0,0.25)", padding: "2px 3px", borderRadius: 4, lineHeight: 1, flexShrink: 0, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#dc2626"; (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.08)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(0,0,0,0.25)"; (e.currentTarget as HTMLElement).style.background = "none"; }}
                     >
                       <IconTrash className="w-3 h-3" />
                     </button>
@@ -678,357 +510,187 @@ export default function ChatInterface() {
           </>
         )}
 
-        {/* Spacer + help text */}
         <div style={{ marginTop: "auto", padding: "12px 14px 16px" }}>
-          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.18)", lineHeight: 1.5, margin: 0 }}>
+          <p style={{ fontSize: 11, color: "#71718A", lineHeight: 1.5, margin: 0 }}>
             Sélectionnez un agent pour adapter le prompt et les suggestions.
           </p>
         </div>
       </aside>
 
-      {/* ════════════════════════════════════════
-          MAIN — Chat
-      ════════════════════════════════════════ */}
+      {/* ════ MAIN ════ */}
       <div className="flex flex-col flex-1 min-w-0">
 
-        {/* ── Header ── */}
-        <header
-          style={{
-            background: "rgba(10,11,18,0.85)",
-            borderBottom: "1px solid rgba(255,255,255,0.05)",
-            backdropFilter: "blur(12px)",
-          }}
-          className="flex items-center justify-between px-6 py-4 flex-shrink-0"
-        >
+        <header style={{ background: "rgba(255,255,255,0.92)", borderBottom: "1px solid #E4E4EF", backdropFilter: "blur(12px)" }} className="flex items-center justify-between px-6 py-4 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div
-              style={{ background: primary }}
-              className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg overflow-hidden flex-shrink-0"
-            >
-              {config.logoUrl ? (
+            <div style={{ background: primary }} className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg overflow-hidden flex-shrink-0">
+              {config.logoUrl
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={config.logoUrl} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-              ) : (
-                <IconBolt className="w-5 h-5 text-white" />
-              )}
+                ? <img src={config.logoUrl} alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                : <IconBolt className="w-5 h-5 text-white" />}
             </div>
             <div>
-              <p
-                className="text-base font-semibold leading-none tracking-tight"
-                style={{ fontFamily: "var(--font-syne)", color: "#ffffff" }}
-              >
-                {config.platformName}
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
-                Plateforme d&apos;intelligence opérationnelle
-              </p>
+              <p className="text-base font-semibold leading-none tracking-tight" style={{ fontFamily: "var(--font-syne)", color: "#0F0F18" }}>{config.platformName}</p>
+              <p className="text-xs mt-0.5" style={{ color: "#71718A" }}>Plateforme d&apos;intelligence opérationnelle</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Agent badge */}
-            <div
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-              style={{
-                background: hexToRgba(primary, 0.1),
-                border: `1px solid ${hexToRgba(primary, 0.25)}`,
-              }}
-            >
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: hexToRgba(primary, 0.08), border: `1px solid ${hexToRgba(primary, 0.2)}` }}>
               <span className="w-2 h-2 rounded-full" style={{ background: primary }} />
-              <span className="text-sm font-medium" style={{ color: lightPrimary }}>
-                {displayAgentName}
-              </span>
+              <span className="text-sm font-medium" style={{ color: primary }}>{displayAgentName}</span>
             </div>
 
-            {/* DataViz button */}
             <button
               onClick={() => documents.length >= 1 && setShowDataViz(true)}
               title={documents.length === 0 ? "Chargez un fichier CSV/Excel pour analyser" : "Analyser les graphiques"}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
-              style={{
-                background: documents.length >= 1 ? primary : "rgba(255,255,255,0.07)",
-                border: `1px solid ${documents.length >= 1 ? primary : "rgba(255,255,255,0.12)"}`,
-                color: documents.length >= 1 ? "#ffffff" : "rgba(255,255,255,0.4)",
-                cursor: documents.length >= 1 ? "pointer" : "not-allowed",
-                transition: "all 0.15s",
-                opacity: documents.length >= 1 ? 1 : 0.6,
-              }}
-              onMouseEnter={(e) => { if (documents.length >= 1) e.currentTarget.style.cssText += "opacity:0.85;"; }}
-              onMouseLeave={(e) => { if (documents.length >= 1) e.currentTarget.style.cssText += "opacity:1;"; }}
+              style={{ background: documents.length >= 1 ? primary : "#F5F5FA", border: `1px solid ${documents.length >= 1 ? primary : "#E4E4EF"}`, color: documents.length >= 1 ? "#fff" : "#71718A", cursor: documents.length >= 1 ? "pointer" : "not-allowed", transition: "all 0.15s", opacity: documents.length >= 1 ? 1 : 0.7 }}
+              onMouseEnter={(e) => { if (documents.length >= 1) e.currentTarget.style.opacity = "0.85"; }}
+              onMouseLeave={(e) => { if (documents.length >= 1) e.currentTarget.style.opacity = "1"; }}
             >
               📊 <span>Analyser</span>
             </button>
 
-            {/* Knowledge Base button */}
             <button
               onClick={() => setShowKB((v) => !v)}
               title="Base de connaissances"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
-              style={{
-                background: showKB
-                  ? hexToRgba(primary, 0.15)
-                  : knowledgeBase.length > 0
-                  ? hexToRgba(primary, 0.08)
-                  : "rgba(255,255,255,0.07)",
-                border: `1px solid ${showKB || knowledgeBase.length > 0 ? hexToRgba(primary, 0.3) : "rgba(255,255,255,0.12)"}`,
-                color: showKB || knowledgeBase.length > 0 ? lightPrimary : "rgba(255,255,255,0.4)",
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.15)};border-color:${hexToRgba(primary, 0.4)};color:${lightPrimary};`)}
-              onMouseLeave={(e) => (e.currentTarget.style.cssText += showKB || knowledgeBase.length > 0
-                ? `background:${hexToRgba(primary, 0.08)};border-color:${hexToRgba(primary, 0.3)};color:${lightPrimary};`
-                : "background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.12);color:rgba(255,255,255,0.4);")}
+              style={{ background: showKB || knowledgeBase.length > 0 ? hexToRgba(primary, 0.08) : "#F5F5FA", border: `1px solid ${showKB || knowledgeBase.length > 0 ? hexToRgba(primary, 0.3) : "#E4E4EF"}`, color: showKB || knowledgeBase.length > 0 ? primary : "#71718A", cursor: "pointer", transition: "all 0.15s" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = hexToRgba(primary, 0.12); e.currentTarget.style.borderColor = hexToRgba(primary, 0.4); e.currentTarget.style.color = primary; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = showKB || knowledgeBase.length > 0 ? hexToRgba(primary, 0.08) : "#F5F5FA"; e.currentTarget.style.borderColor = showKB || knowledgeBase.length > 0 ? hexToRgba(primary, 0.3) : "#E4E4EF"; e.currentTarget.style.color = showKB || knowledgeBase.length > 0 ? primary : "#71718A"; }}
             >
-              📚
-              <span>Base</span>
+              📚 <span>Base</span>
               {knowledgeBase.length > 0 && (
-                <span style={{
-                  background: primary,
-                  color: "#fff",
-                  borderRadius: "999px",
-                  padding: "0 5px",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  lineHeight: "16px",
-                }}>
-                  {knowledgeBase.length}
-                </span>
+                <span style={{ background: primary, color: "#fff", borderRadius: "999px", padding: "0 5px", fontSize: 10, fontWeight: 700, lineHeight: "16px" }}>{knowledgeBase.length}</span>
               )}
             </button>
 
-            {/* PDF download button */}
             <button
               onClick={downloadConversationPDF}
               disabled={messages.length <= 1}
               title="Télécharger la conversation en PDF"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
-              style={{
-                background: messages.length > 1 ? hexToRgba(primary, 0.08) : "rgba(255,255,255,0.04)",
-                border: `1px solid ${messages.length > 1 ? hexToRgba(primary, 0.25) : "rgba(255,255,255,0.08)"}`,
-                color: messages.length > 1 ? lightPrimary : "rgba(255,255,255,0.2)",
-                cursor: messages.length > 1 ? "pointer" : "not-allowed",
-                transition: "all 0.15s",
-                opacity: messages.length > 1 ? 1 : 0.5,
-              }}
-              onMouseEnter={(e) => { if (messages.length > 1) e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.15)};border-color:${hexToRgba(primary, 0.4)};`; }}
-              onMouseLeave={(e) => { if (messages.length > 1) e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.08)};border-color:${hexToRgba(primary, 0.25)};`; }}
+              style={{ background: messages.length > 1 ? hexToRgba(primary, 0.06) : "#F5F5FA", border: `1px solid ${messages.length > 1 ? hexToRgba(primary, 0.25) : "#E4E4EF"}`, color: messages.length > 1 ? primary : "#71718A", cursor: messages.length > 1 ? "pointer" : "not-allowed", transition: "all 0.15s", opacity: messages.length > 1 ? 1 : 0.5 }}
+              onMouseEnter={(e) => { if (messages.length > 1) { e.currentTarget.style.background = hexToRgba(primary, 0.12); e.currentTarget.style.borderColor = hexToRgba(primary, 0.4); } }}
+              onMouseLeave={(e) => { if (messages.length > 1) { e.currentTarget.style.background = hexToRgba(primary, 0.06); e.currentTarget.style.borderColor = hexToRgba(primary, 0.25); } }}
             >
-              <IconDownload className="w-3.5 h-3.5" />
-              <span>PDF</span>
+              <IconDownload className="w-3.5 h-3.5" /><span>PDF</span>
             </button>
 
-            {/* Config button */}
             <button
               onClick={() => setShowConfig((v) => !v)}
               title="Configuration"
-              className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{
-                color: showConfig ? lightPrimary : "rgba(255,255,255,0.3)",
-                background: showConfig ? hexToRgba(primary, 0.12) : "transparent",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.cssText += "background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.6);")}
-              onMouseLeave={(e) => (e.currentTarget.style.cssText += showConfig
-                ? `background:${hexToRgba(primary, 0.12)};color:${lightPrimary};`
-                : "background:transparent;color:rgba(255,255,255,0.3);")}
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-all"
+              style={{ color: showConfig ? primary : "#71718A", background: showConfig ? hexToRgba(primary, 0.08) : "transparent", border: showConfig ? `1px solid ${hexToRgba(primary, 0.2)}` : "1px solid transparent" }}
+              onMouseEnter={(e) => { if (!showConfig) { e.currentTarget.style.background = "#F5F5FA"; e.currentTarget.style.color = "#0F0F18"; } }}
+              onMouseLeave={(e) => { if (!showConfig) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#71718A"; } }}
             >
               <IconGear className="w-4 h-4" />
             </button>
 
-            {/* Clear button */}
             <button
               onClick={clearConversation}
               title="Nouvelle conversation"
-              className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{ color: "rgba(255,255,255,0.3)" }}
-              onMouseEnter={(e) => (e.currentTarget.style.cssText += "background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.6);")}
-              onMouseLeave={(e) => (e.currentTarget.style.cssText += "background:transparent;color:rgba(255,255,255,0.3);")}
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-all"
+              style={{ color: "#71718A", background: "transparent", border: "1px solid transparent" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#F5F5FA"; e.currentTarget.style.color = "#0F0F18"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#71718A"; }}
             >
               <IconTrash className="w-4 h-4" />
             </button>
           </div>
         </header>
 
-        {/* ── Messages ── */}
-        <div
-          className="flex-1 overflow-y-auto px-4 py-8"
-          style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.08) transparent" }}
-        >
+        <div className="flex-1 overflow-y-auto px-4 py-8" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(0,0,0,0.08) transparent" }}>
           <div className="max-w-3xl mx-auto space-y-5">
             {messages.map((msg) => (
-              <MessageBubble
-                key={msg.id}
-                msg={msg}
-                isCurrentlyStreaming={isStreaming && msg.id === streamingIdRef.current}
-                primary={primary}
-                lightPrimary={lightPrimary}
-              />
+              <MessageBubble key={msg.id} msg={msg} isCurrentlyStreaming={isStreaming && msg.id === streamingIdRef.current} primary={primary} />
             ))}
-
-            {/* Suggestions */}
             {showSuggestions && (
               <div className="pt-4">
-                <p className="text-xs text-center mb-3" style={{ color: "rgba(255,255,255,0.25)" }}>
+                <p className="text-xs text-center mb-3" style={{ color: "#71718A" }}>
                   {activeAgent ? `Cas d'usage — ${activeAgent.name}` : "Suggestions"}
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center">
                   {activeSuggestions.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => sendMessage(s)}
-                      className="px-4 py-2 rounded-full text-sm transition-all"
-                      style={{
-                        border: `1px solid ${hexToRgba(primary, 0.3)}`,
-                        background: hexToRgba(primary, 0.05),
-                        color: lightPrimary,
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.15)};border-color:${hexToRgba(primary, 0.5)};`)}
-                      onMouseLeave={(e) => (e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.05)};border-color:${hexToRgba(primary, 0.3)};`)}
-                    >
-                      {s}
-                    </button>
+                    <button key={s} onClick={() => sendMessage(s)} className="px-4 py-2 rounded-full text-sm transition-all"
+                      style={{ border: `1px solid ${hexToRgba(primary, 0.3)}`, background: hexToRgba(primary, 0.05), color: primary }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = hexToRgba(primary, 0.12); e.currentTarget.style.borderColor = hexToRgba(primary, 0.5); }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = hexToRgba(primary, 0.05); e.currentTarget.style.borderColor = hexToRgba(primary, 0.3); }}
+                    >{s}</button>
                   ))}
                 </div>
               </div>
             )}
-
             <div ref={messagesEndRef} />
           </div>
         </div>
 
-        {/* ── Input ── */}
         <div className="px-4 pb-6 pt-2 flex-shrink-0">
           <div className="max-w-3xl mx-auto">
-
-            {/* Erreur upload */}
-          {uploadError && (
-            <div className="flex items-center gap-2 mb-2 px-1">
-              <span
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
-                style={{
-                  background: "rgba(239,68,68,0.1)",
-                  border: "1px solid rgba(239,68,68,0.3)",
-                  color: "#fca5a5",
-                }}
-              >
-                ⚠ {uploadError}
-              </span>
-              <button
-                onClick={() => setUploadError(null)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.3)", fontSize: 11 }}
-              >✕</button>
-            </div>
-          )}
-
-          {/* Badges documents */}
-          {documents.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 mb-2 px-1">
-              {documents.map((doc, i) => (
-                <span
-                  key={i}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
-                  style={{
-                    background: i === 0 ? hexToRgba(primary, 0.12) : "rgba(6,182,212,0.1)",
-                    border: `1px solid ${i === 0 ? hexToRgba(primary, 0.3) : "rgba(6,182,212,0.25)"}`,
-                    color: i === 0 ? lightPrimary : "#06b6d4",
-                  }}
-                >
-                  📎
-                  <span style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {doc.name}
+            {uploadError && (
+              <div className="flex items-center gap-2 mb-2 px-1">
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "#dc2626" }}>⚠ {uploadError}</span>
+                <button onClick={() => setUploadError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#71718A", fontSize: 11 }}>✕</button>
+              </div>
+            )}
+            {documents.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mb-2 px-1">
+                {documents.map((doc, i) => (
+                  <span key={i} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
+                    style={{ background: i === 0 ? hexToRgba(primary, 0.08) : "rgba(6,182,212,0.08)", border: `1px solid ${i === 0 ? hexToRgba(primary, 0.25) : "rgba(6,182,212,0.25)"}`, color: i === 0 ? primary : "#0ea5e9" }}>
+                    📎
+                    <span style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</span>
+                    <button onClick={() => removeDocument(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", opacity: 0.6, padding: 0, lineHeight: 1, fontSize: 11 }}>✕</button>
                   </span>
-                  <button
-                    onClick={() => removeDocument(i)}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", opacity: 0.6, padding: 0, lineHeight: 1, fontSize: 11 }}
-                  >✕</button>
-                </span>
-              ))}
+                ))}
+                {documents.length >= 1 && (
+                  <button onClick={() => setShowDataViz(true)} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
+                    style={{ background: hexToRgba(primary, 0.1), border: `1px solid ${hexToRgba(primary, 0.35)}`, color: primary, cursor: "pointer" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = hexToRgba(primary, 0.18))}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = hexToRgba(primary, 0.1))}
+                  >📊 Analyser</button>
+                )}
+              </div>
+            )}
 
-              {/* Bouton Analyser dès 1 fichier */}
-              {documents.length >= 1 && (
-                <button
-                  onClick={() => setShowDataViz(true)}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
-                  style={{
-                    background: hexToRgba(primary, 0.15),
-                    border: `1px solid ${hexToRgba(primary, 0.4)}`,
-                    color: lightPrimary,
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.25)};`)}
-                  onMouseLeave={(e) => (e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.15)};`)}
-                >
-                  📊 Analyser
-                </button>
-              )}
-            </div>
-          )}
-
-            <div
-              className="flex items-end gap-3 rounded-2xl px-4 py-3"
-              style={{ background: "#13141d", border: "1px solid rgba(255,255,255,0.07)" }}
+            <div className="flex items-end gap-3 rounded-2xl px-4 py-3"
+              style={{ background: "#F5F5FA", border: "1px solid #E4E4EF" }}
               onFocusCapture={(e) => ((e.currentTarget as HTMLElement).style.borderColor = hexToRgba(primary, 0.45))}
-              onBlurCapture={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)")}
+              onBlurCapture={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "#E4E4EF")}
             >
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isStreaming || isParsingDoc}
-                className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{
-                  color: documents.length > 0 ? lightPrimary : "rgba(255,255,255,0.25)",
-                  background: documents.length > 0 ? hexToRgba(primary, 0.12) : "transparent",
-                  opacity: isStreaming || isParsingDoc || documents.length >= 2 ? 0.4 : 1,
-                  cursor: isStreaming || isParsingDoc || documents.length >= 2 ? "not-allowed" : "pointer",
-                }}
+              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStreaming || isParsingDoc}
+                className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
+                style={{ color: documents.length > 0 ? primary : "#71718A", background: documents.length > 0 ? hexToRgba(primary, 0.08) : "transparent", opacity: isStreaming || isParsingDoc || documents.length >= 2 ? 0.4 : 1, cursor: isStreaming || isParsingDoc || documents.length >= 2 ? "not-allowed" : "pointer" }}
                 title={documents.length >= 2 ? "2 fichiers maximum" : "Joindre un fichier PDF, TXT ou CSV"}
-                onMouseEnter={(e) => { if (!isStreaming && !isParsingDoc && documents.length < 2) e.currentTarget.style.cssText += "color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.06);"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.cssText += documents.length > 0 ? `color:${lightPrimary};background:${hexToRgba(primary, 0.12)};` : "color:rgba(255,255,255,0.25);background:transparent;"; }}
+                onMouseEnter={(e) => { if (!isStreaming && !isParsingDoc && documents.length < 2) { e.currentTarget.style.color = "#0F0F18"; e.currentTarget.style.background = "#E4E4EF"; } }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = documents.length > 0 ? primary : "#71718A"; e.currentTarget.style.background = documents.length > 0 ? hexToRgba(primary, 0.08) : "transparent"; }}
               >
                 {isParsingDoc ? <IconSpinner className="w-4 h-4" /> : <IconPaperclip className="w-4 h-4" />}
               </button>
-
               <input ref={fileInputRef} type="file" accept=".pdf,.txt,.csv,.tsv,.xlsx,.xls" className="hidden" onChange={handleFileChange} />
-
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onInput={handleInput}
+              <textarea ref={textareaRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} onInput={handleInput}
                 placeholder={activeAgent ? `Posez votre question au ${activeAgent.name}…` : `Posez votre question à ${config.agentName}…`}
-                rows={1}
-                disabled={isStreaming}
+                rows={1} disabled={isStreaming}
                 className="flex-1 bg-transparent text-sm resize-none outline-none leading-relaxed"
-                style={{ color: "#e8eaf0", caretColor: primary, maxHeight: "128px", overflowY: "auto" }}
+                style={{ color: "#0F0F18", caretColor: primary, maxHeight: "128px", overflowY: "auto" }}
               />
-
-              <button
-                onClick={() => sendMessage(input)}
-                disabled={!input.trim() || isStreaming}
+              <button onClick={() => sendMessage(input)} disabled={!input.trim() || isStreaming}
                 className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{
-                  background: input.trim() && !isStreaming ? primary : hexToRgba(primary, 0.2),
-                  opacity: !input.trim() || isStreaming ? 0.4 : 1,
-                  cursor: !input.trim() || isStreaming ? "not-allowed" : "pointer",
-                }}
+                style={{ background: input.trim() && !isStreaming ? primary : hexToRgba(primary, 0.2), opacity: !input.trim() || isStreaming ? 0.5 : 1, cursor: !input.trim() || isStreaming ? "not-allowed" : "pointer" }}
               >
                 <IconArrowUp className="w-4 h-4 text-white" />
               </button>
             </div>
 
-            <p className="text-center text-xs mt-2.5" style={{ color: "rgba(255,255,255,0.15)" }}>
+            <p className="text-center text-xs mt-2.5" style={{ color: "#71718A" }}>
               Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne
             </p>
           </div>
         </div>
 
-        {/* ── Trust banner ── */}
-        <div
-          className="flex-shrink-0 flex items-center justify-center py-2 px-4"
-          style={{ borderTop: "1px solid #e5e7eb", background: "#ffffff" }}
-        >
-          <span style={{ fontSize: 12, color: "#111827", fontWeight: 500, letterSpacing: "0.01em" }}>
+        <div className="flex-shrink-0 flex items-center justify-center py-2 px-4" style={{ borderTop: "1px solid #E4E4EF", background: "#ffffff" }}>
+          <span style={{ fontSize: 12, color: "#71718A", fontWeight: 500, letterSpacing: "0.01em" }}>
             🔒 Vos données ne quittent pas l&apos;Europe · Non utilisées pour entraîner l&apos;IA
           </span>
         </div>
@@ -1037,230 +699,72 @@ export default function ChatInterface() {
   );
 }
 
-/* ════════════════════════════════════════
-   AgentCard
-════════════════════════════════════════ */
-function AgentCard({
-  agent,
-  isSelected,
-  primary,
-  lightPrimary,
-  onClick,
-}: {
-  agent: Agent;
-  isSelected: boolean;
-  primary: string;
-  lightPrimary: string;
-  onClick: () => void;
-}) {
+/* ════ AgentCard ════ */
+function AgentCard({ agent, isSelected, primary, onClick }: { agent: Agent; isSelected: boolean; primary: string; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      style={{
-        width: "100%",
-        padding: "12px 10px",
-        borderRadius: 10,
-        border: `1px solid ${isSelected ? hexToRgba(primary, 0.35) : "rgba(255,255,255,0.05)"}`,
-        borderLeft: `3px solid ${isSelected ? primary : "transparent"}`,
-        background: isSelected ? hexToRgba(primary, 0.08) : "transparent",
-        cursor: "pointer",
-        textAlign: "left",
-        transition: "all 0.15s",
-      }}
-      onMouseEnter={(e) => {
-        if (!isSelected)
-          (e.currentTarget as HTMLElement).style.cssText +=
-            "background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.1);";
-      }}
-      onMouseLeave={(e) => {
-        if (!isSelected)
-          (e.currentTarget as HTMLElement).style.cssText +=
-            "background:transparent;border-color:rgba(255,255,255,0.05);";
-      }}
+    <button onClick={onClick}
+      style={{ width: "100%", padding: "12px 10px", borderRadius: 10, border: `1px solid ${isSelected ? hexToRgba(primary, 0.35) : "#E4E4EF"}`, borderLeft: `3px solid ${isSelected ? primary : "transparent"}`, background: isSelected ? hexToRgba(primary, 0.06) : "transparent", cursor: "pointer", textAlign: "left", transition: "all 0.15s" }}
+      onMouseEnter={(e) => { if (!isSelected) { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.02)"; (e.currentTarget as HTMLElement).style.borderColor = "#C5C5D5"; } }}
+      onMouseLeave={(e) => { if (!isSelected) { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.borderColor = "#E4E4EF"; } }}
     >
-      {/* Icon + name */}
       <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
-        <div
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 8,
-            background: isSelected ? hexToRgba(primary, 0.2) : "rgba(255,255,255,0.06)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            color: isSelected ? lightPrimary : "rgba(255,255,255,0.45)",
-          }}
-        >
-          {agent.icon}
-        </div>
+        <div style={{ width: 30, height: 30, borderRadius: 8, background: isSelected ? hexToRgba(primary, 0.12) : "rgba(0,0,0,0.05)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: isSelected ? primary : "#71718A" }}>{agent.icon}</div>
         <div style={{ minWidth: 0 }}>
-          <p style={{ color: isSelected ? "#fff" : "rgba(255,255,255,0.7)", fontWeight: 600, fontSize: 13, margin: 0 }}>
-            {agent.name}
-          </p>
-          <p style={{ color: "rgba(255,255,255,0.28)", fontSize: 10, margin: "1px 0 0", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {agent.fullName}
-          </p>
+          <p style={{ color: isSelected ? "#0F0F18" : "rgba(0,0,0,0.7)", fontWeight: 600, fontSize: 13, margin: 0 }}>{agent.name}</p>
+          <p style={{ color: "#71718A", fontSize: 10, margin: "1px 0 0", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{agent.fullName}</p>
         </div>
       </div>
-
-      {/* Use cases */}
       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
         {agent.suggestions.slice(0, 3).map((s, i) => (
-          <p
-            key={i}
-            style={{
-              fontSize: 11,
-              color: isSelected ? "rgba(255,255,255,0.42)" : "rgba(255,255,255,0.22)",
-              margin: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              lineHeight: 1.4,
-            }}
-          >
-            · {s}
-          </p>
+          <p key={i} style={{ fontSize: 11, color: isSelected ? "rgba(0,0,0,0.45)" : "rgba(0,0,0,0.3)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>· {s}</p>
         ))}
       </div>
     </button>
   );
 }
 
-/* ════════════════════════════════════════
-   MessageBubble
-════════════════════════════════════════ */
-function MessageBubble({
-  msg, isCurrentlyStreaming, primary, lightPrimary,
-}: {
-  msg: Message; isCurrentlyStreaming: boolean; primary: string; lightPrimary: string;
-}) {
+/* ════ MessageBubble ════ */
+function MessageBubble({ msg, isCurrentlyStreaming, primary }: { msg: Message; isCurrentlyStreaming: boolean; primary: string }) {
   const isUser = msg.role === "user";
   return (
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-          style={{ background: hexToRgba(primary, 0.15), border: `1px solid ${hexToRgba(primary, 0.25)}` }}
-        >
-          <IconBolt className="w-4 h-4" style={{ color: lightPrimary }} />
+        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: hexToRgba(primary, 0.1), border: `1px solid ${hexToRgba(primary, 0.2)}` }}>
+          <IconBolt className="w-4 h-4" style={{ color: primary }} />
         </div>
       )}
-      <div
-        className="max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed"
+      <div className="max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed"
         style={isUser
-          ? { background: primary, color: "#ffffff", borderRadius: "18px 4px 18px 18px", boxShadow: `0 2px 16px ${hexToRgba(primary, 0.3)}` }
-          : { background: "#13141d", border: "1px solid rgba(255,255,255,0.06)", color: "#d4d8f0", borderRadius: "4px 18px 18px 18px" }
+          ? { background: primary, color: "#fff", borderRadius: "18px 4px 18px 18px", boxShadow: `0 2px 16px ${hexToRgba(primary, 0.25)}` }
+          : { background: "#FFFFFF", border: "1px solid #E4E4EF", color: "#0F0F18", borderRadius: "4px 18px 18px 18px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }
         }
       >
-        {isCurrentlyStreaming && msg.content === "" ? (
-          <TypingIndicator lightPrimary={lightPrimary} />
-        ) : (
-          <p className="whitespace-pre-wrap">{msg.content}</p>
-        )}
+        {isCurrentlyStreaming && msg.content === "" ? <TypingIndicator primary={primary} /> : <p className="whitespace-pre-wrap">{msg.content}</p>}
       </div>
     </div>
   );
 }
 
-/* ── TypingIndicator ── */
-function TypingIndicator({ lightPrimary }: { lightPrimary: string }) {
+function TypingIndicator({ primary }: { primary: string }) {
   return (
     <div className="flex items-center gap-1.5 py-0.5">
       {[0, 1, 2].map((i) => (
-        <span key={i} className="block w-1.5 h-1.5 rounded-full" style={{ background: lightPrimary, animation: "typingBounce 1.2s ease-in-out infinite", animationDelay: `${i * 0.2}s` }} />
+        <span key={i} className="block w-1.5 h-1.5 rounded-full" style={{ background: primary, animation: "typingBounce 1.2s ease-in-out infinite", animationDelay: `${i * 0.2}s` }} />
       ))}
     </div>
   );
 }
 
-/* ════════════════════════════════════════
-   Icons
-════════════════════════════════════════ */
-function IconBolt({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} style={style} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-    </svg>
-  );
-}
-function IconTrash({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" />
-    </svg>
-  );
-}
-function IconArrowUp({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 19V5M5 12l7-7 7 7" />
-    </svg>
-  );
-}
-function IconPaperclip({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-    </svg>
-  );
-}
-function IconSpinner({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite" }}>
-      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </svg>
-  );
-}
-function IconGear({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  );
-}
-function IconPlus({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  );
-}
-/* ── Agent icons ── */
-function IconChartBar({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="12" width="4" height="9" /><rect x="10" y="7" width="4" height="14" /><rect x="17" y="3" width="4" height="18" />
-    </svg>
-  );
-}
-function IconUsers({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
-}
-function IconTrendingUp({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" />
-    </svg>
-  );
-}
-function IconLayers({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" />
-    </svg>
-  );
-}
-function IconDownload({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  );
-}
+/* ════ Icons ════ */
+function IconBolt({ className, style }: { className?: string; style?: React.CSSProperties }) { return <svg viewBox="0 0 24 24" className={className} style={style} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>; }
+function IconTrash({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" /></svg>; }
+function IconArrowUp({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>; }
+function IconPaperclip({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>; }
+function IconSpinner({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>; }
+function IconGear({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>; }
+function IconPlus({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>; }
+function IconDownload({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>; }
+function IconChartBar({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="12" width="4" height="9" /><rect x="10" y="7" width="4" height="14" /><rect x="17" y="3" width="4" height="18" /></svg>; }
+function IconUsers({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>; }
+function IconTrendingUp({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>; }
+function IconLayers({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>; }
