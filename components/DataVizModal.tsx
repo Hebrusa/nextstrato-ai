@@ -267,7 +267,7 @@ function SingleChart({ chart, primary, title }: { chart: ChartData; primary: str
             <CartesianGrid {...gridProps} />
             <XAxis dataKey={chart.xKey} {...axisProps} tickFormatter={(v) => String(v).slice(0, 10)} />
             <YAxis {...axisProps} tickFormatter={fmt} width={45} />
-            <Tooltip {...tooltipStyle} formatter={(v: number) => fmt(v)} />
+            <Tooltip {...tooltipStyle} formatter={(v: number | undefined) => fmt(v ?? 0)} />
             {chart.yKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }} />}
             {chart.yKeys.map((k, i) => (
               <Bar key={k} dataKey={k} fill={COLORS[i % COLORS.length]} radius={[3, 3, 0, 0]} maxBarSize={40} />
@@ -278,7 +278,7 @@ function SingleChart({ chart, primary, title }: { chart: ChartData; primary: str
             <CartesianGrid {...gridProps} />
             <XAxis dataKey={chart.xKey} {...axisProps} tickFormatter={(v) => String(v).slice(0, 10)} />
             <YAxis {...axisProps} tickFormatter={fmt} width={45} />
-            <Tooltip {...tooltipStyle} formatter={(v: number) => fmt(v)} />
+            <Tooltip {...tooltipStyle} formatter={(v: number | undefined) => fmt(v ?? 0)} />
             {chart.yKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }} />}
             {chart.yKeys.map((k, i) => (
               <Line key={k} type="monotone" dataKey={k} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} />
@@ -297,7 +297,7 @@ function SingleChart({ chart, primary, title }: { chart: ChartData; primary: str
             <CartesianGrid {...gridProps} />
             <XAxis dataKey={chart.xKey} {...axisProps} tickFormatter={(v) => String(v).slice(0, 10)} />
             <YAxis {...axisProps} tickFormatter={fmt} width={45} />
-            <Tooltip {...tooltipStyle} formatter={(v: number) => fmt(v)} />
+            <Tooltip {...tooltipStyle} formatter={(v: number | undefined) => fmt(v ?? 0)} />
             {chart.yKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }} />}
             {chart.yKeys.map((k, i) => (
               <Area key={k} type="monotone" dataKey={k} stroke={COLORS[i % COLORS.length]} strokeWidth={2} fill={`url(#area-grad-${k})`} />
@@ -323,7 +323,7 @@ function SingleChart({ chart, primary, title }: { chart: ChartData; primary: str
             </Pie>
             <Tooltip
               contentStyle={tooltipStyle.contentStyle}
-              formatter={(v: number) => fmt(v)}
+              formatter={(v: number | undefined) => fmt(v ?? 0)}
             />
           </PieChart>
         )}
@@ -346,7 +346,7 @@ function ComparisonChart({ cmp, primary }: { cmp: ComparisonData; primary: strin
           <CartesianGrid {...gridProps} />
           <XAxis dataKey="name" {...axisProps} tickFormatter={(v) => String(v).slice(0, 10)} />
           <YAxis {...axisProps} tickFormatter={fmt} width={45} />
-          <Tooltip {...tooltipStyle} formatter={(v: number) => fmt(v)} />
+          <Tooltip {...tooltipStyle} formatter={(v: number | undefined) => fmt(v ?? 0)} />
           <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }} />
           <Bar dataKey={cmp.keys[0]} fill={primary} radius={[3, 3, 0, 0]} maxBarSize={30} />
           <Bar dataKey={cmp.keys[1]} fill={ACCENT} radius={[3, 3, 0, 0]} maxBarSize={30} />
