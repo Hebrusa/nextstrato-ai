@@ -97,7 +97,27 @@ const DEFAULT_SUGGESTIONS = [
 /* ── Types ── */
 type Message = { id: string; role: "user" | "assistant"; content: string };
 
+type Conversation = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: Message[];
+  agentId: string | null;
+};
+
 const LS_KEY = "nextstrato-config";
+const LS_HISTORY_KEY = "nextstrato-conversations";
+const MAX_SAVED_CONVERSATIONS = 30;
+
+function formatRelativeDate(ts: number): string {
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return "À l'instant";
+  if (diff < 3_600_000) return `Il y a ${Math.floor(diff / 60_000)} min`;
+  if (diff < 86_400_000) return `Il y a ${Math.floor(diff / 3_600_000)} h`;
+  if (diff < 7 * 86_400_000) return `Il y a ${Math.floor(diff / 86_400_000)} j`;
+  return new Date(ts).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
 
 export default function ChatInterface() {
   /* ── Config ── */
@@ -132,6 +152,18 @@ export default function ChatInterface() {
     setActiveAgent((prev) => (prev?.id === agent.id ? null : agent));
   };
 
+  /* ── Conversation history ── */
+  const [conversations, setConversations] = useState<Conversation[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = localStorage.getItem(LS_HISTORY_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const currentConversationIdRef = useRef<string | null>(null);
+  const messagesRef = useRef<Message[]>([]);
+
   /* ── UI state ── */
   const [showConfig, setShowConfig] = useState(false);
   const [messages, setMessages] = useState<Message[]>(() => [
@@ -149,6 +181,9 @@ export default function ChatInterface() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const streamingIdRef = useRef<string | null>(null);
 
+  /* Keep messagesRef in sync */
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
   useEffect(() => {
     setMessages((prev) => {
       if (prev.length === 1 && prev[0].id === "init")
@@ -164,6 +199,71 @@ export default function ChatInterface() {
   /* ── Colors ── */
   const primary = config.primaryColor;
   const lightPrimary = lightenColor(primary);
+
+  /* ── Save conversation to localStorage ── */
+  const saveConversation = useCallback((msgs: Message[]) => {
+    const firstUserMsg = msgs.find((m) => m.role === "user");
+    if (!firstUserMsg) return; // nothing to save
+
+    const title =
+      firstUserMsg.content.slice(0, 40) +
+      (firstUserMsg.content.length > 40 ? "…" : "");
+
+    setConversations((prev) => {
+      const existingId = currentConversationIdRef.current;
+      let updated: Conversation[];
+
+      if (existingId && prev.find((c) => c.id === existingId)) {
+        updated = prev.map((c) =>
+          c.id === existingId
+            ? { ...c, messages: msgs, updatedAt: Date.now(), agentId: activeAgentRef.current?.id ?? null }
+            : c
+        );
+      } else {
+        const newConv: Conversation = {
+          id: `conv-${Date.now()}`,
+          title,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          messages: msgs,
+          agentId: activeAgentRef.current?.id ?? null,
+        };
+        currentConversationIdRef.current = newConv.id;
+        setCurrentConversationId(newConv.id);
+        updated = [newConv, ...prev].slice(0, MAX_SAVED_CONVERSATIONS);
+      }
+
+      try { localStorage.setItem(LS_HISTORY_KEY, JSON.stringify(updated)); } catch { /* noop */ }
+      return updated;
+    });
+  }, []);
+
+  /* ── Load conversation ── */
+  const loadConversation = useCallback((conv: Conversation) => {
+    setMessages(conv.messages);
+    setCurrentConversationId(conv.id);
+    currentConversationIdRef.current = conv.id;
+    const agent = AGENTS.find((a) => a.id === conv.agentId) ?? null;
+    setActiveAgent(agent);
+    setDocuments([]);
+    setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+  }, []);
+
+  /* ── Delete conversation ── */
+  const deleteConversation = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConversations((prev) => {
+      const updated = prev.filter((c) => c.id !== id);
+      try { localStorage.setItem(LS_HISTORY_KEY, JSON.stringify(updated)); } catch { /* noop */ }
+      return updated;
+    });
+    if (currentConversationIdRef.current === id) {
+      setMessages([{ id: "init", role: "assistant", content: configRef.current.welcomeMessage }]);
+      setCurrentConversationId(null);
+      currentConversationIdRef.current = null;
+    }
+  }, []);
 
   /* ── File upload ── */
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -256,8 +356,10 @@ export default function ChatInterface() {
     } finally {
       setIsStreaming(false);
       streamingIdRef.current = null;
+      // Save conversation after response completes
+      saveConversation(messagesRef.current);
     }
-  }, [messages, isStreaming, documents]);
+  }, [messages, isStreaming, documents, saveConversation]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
@@ -267,11 +369,19 @@ export default function ChatInterface() {
     t.style.height = "auto";
     t.style.height = Math.min(t.scrollHeight, 128) + "px";
   };
-  const clearConversation = () => {
+
+  const startNewConversation = useCallback(() => {
     setMessages([{ id: "init", role: "assistant", content: configRef.current.welcomeMessage }]);
+    setCurrentConversationId(null);
+    currentConversationIdRef.current = null;
     setInput("");
     setDocuments([]);
+    setActiveAgent(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
+  }, []);
+
+  const clearConversation = () => {
+    startNewConversation();
   };
 
   const activeSuggestions = activeAgent ? activeAgent.suggestions : DEFAULT_SUGGESTIONS;
@@ -292,7 +402,7 @@ export default function ChatInterface() {
       )}
 
       {/* ════════════════════════════════════════
-          SIDEBAR — Agents
+          SIDEBAR — Agents + Historique
       ════════════════════════════════════════ */}
       <aside
         style={{
@@ -307,8 +417,35 @@ export default function ChatInterface() {
           scrollbarColor: "rgba(255,255,255,0.06) transparent",
         }}
       >
-        {/* Sidebar header */}
-        <div style={{ padding: "20px 14px 10px" }}>
+        {/* ── Nouvelle conversation ── */}
+        <div style={{ padding: "12px 8px 4px" }}>
+          <button
+            onClick={startNewConversation}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "9px 12px",
+              borderRadius: 10,
+              border: `1px solid ${hexToRgba(primary, 0.3)}`,
+              background: hexToRgba(primary, 0.08),
+              color: lightPrimary,
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.16)};border-color:${hexToRgba(primary, 0.5)};`)}
+            onMouseLeave={(e) => (e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.08)};border-color:${hexToRgba(primary, 0.3)};`)}
+          >
+            <IconPlus className="w-4 h-4" />
+            Nouvelle conversation
+          </button>
+        </div>
+
+        {/* ── Agents section ── */}
+        <div style={{ padding: "14px 14px 6px" }}>
           <p style={{
             fontSize: 10,
             fontWeight: 700,
@@ -334,6 +471,108 @@ export default function ChatInterface() {
             />
           ))}
         </div>
+
+        {/* ── Historique section ── */}
+        {conversations.length > 0 && (
+          <>
+            <div style={{ margin: "0 8px", borderTop: "1px solid rgba(255,255,255,0.06)" }} />
+            <div style={{ padding: "14px 14px 6px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <p style={{
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "rgba(255,255,255,0.25)",
+                margin: 0,
+              }}>
+                Historique
+              </p>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", fontWeight: 500 }}>
+                {conversations.length}
+              </span>
+            </div>
+
+            <div style={{ padding: "0 8px 16px", display: "flex", flexDirection: "column", gap: 2 }}>
+              {conversations.map((conv) => {
+                const isActive = conv.id === currentConversationId;
+                return (
+                  <button
+                    key={conv.id}
+                    onClick={() => loadConversation(conv)}
+                    style={{
+                      width: "100%",
+                      padding: "9px 10px",
+                      borderRadius: 8,
+                      border: `1px solid ${isActive ? hexToRgba(primary, 0.3) : "rgba(255,255,255,0.04)"}`,
+                      borderLeft: `3px solid ${isActive ? primary : "transparent"}`,
+                      background: isActive ? hexToRgba(primary, 0.07) : "transparent",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      transition: "all 0.12s",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive)
+                        (e.currentTarget as HTMLElement).style.cssText += "background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.08);";
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive)
+                        (e.currentTarget as HTMLElement).style.cssText += "background:transparent;border-color:rgba(255,255,255,0.04);";
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{
+                        fontSize: 12,
+                        fontWeight: 500,
+                        color: isActive ? "#fff" : "rgba(255,255,255,0.6)",
+                        margin: 0,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        lineHeight: 1.4,
+                      }}>
+                        {conv.title}
+                      </p>
+                      <p style={{
+                        fontSize: 10,
+                        color: "rgba(255,255,255,0.22)",
+                        margin: "2px 0 0",
+                        lineHeight: 1,
+                      }}>
+                        {conv.agentId ? AGENTS.find((a) => a.id === conv.agentId)?.name + " · " : ""}
+                        {formatRelativeDate(conv.updatedAt)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => deleteConversation(conv.id, e)}
+                      title="Supprimer"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "rgba(255,255,255,0.2)",
+                        padding: "2px 3px",
+                        borderRadius: 4,
+                        lineHeight: 1,
+                        flexShrink: 0,
+                        fontSize: 13,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.cssText += "color:rgba(239,68,68,0.7);background:rgba(239,68,68,0.1);")}
+                      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.cssText += "color:rgba(255,255,255,0.2);background:none;")}
+                    >
+                      <IconTrash className="w-3 h-3" />
+                    </button>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
 
         {/* Spacer + help text */}
         <div style={{ marginTop: "auto", padding: "12px 14px 16px" }}>
@@ -436,7 +675,7 @@ export default function ChatInterface() {
             {/* Clear button */}
             <button
               onClick={clearConversation}
-              title="Effacer la conversation"
+              title="Nouvelle conversation"
               className="w-8 h-8 rounded-lg flex items-center justify-center"
               style={{ color: "rgba(255,255,255,0.3)" }}
               onMouseEnter={(e) => (e.currentTarget.style.cssText += "background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.6);")}
@@ -816,6 +1055,13 @@ function IconGear({ className }: { className?: string }) {
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+function IconPlus({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 5v14M5 12h14" />
     </svg>
   );
 }
