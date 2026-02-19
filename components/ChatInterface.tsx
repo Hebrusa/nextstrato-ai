@@ -420,6 +420,63 @@ export default function ChatInterface() {
     startNewConversation();
   };
 
+  /* ── Download conversation as PDF ── */
+  const downloadConversationPDF = useCallback(() => {
+    const conversationMessages = messages.filter((m) => !(m.id === "init" && m.role === "assistant"));
+    if (conversationMessages.length === 0) return;
+
+    const agentName = activeAgent ? activeAgent.fullName : config.agentName;
+    const platformName = config.platformName;
+    const dateStr = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+    const rows = conversationMessages.map((m) => {
+      const isUser = m.role === "user";
+      return `
+        <div class="message ${isUser ? "user" : "assistant"}">
+          <div class="label">${isUser ? "Vous" : agentName}</div>
+          <div class="bubble">${m.content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>")}</div>
+        </div>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>${platformName} — Conversation</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: #1a1a2e; background: #fff; padding: 32px 40px; }
+    header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 24px; }
+    header h1 { font-size: 18px; font-weight: 700; color: #111827; }
+    header span { font-size: 11px; color: #6b7280; }
+    .message { margin-bottom: 18px; }
+    .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+    .user .label { color: #6366f1; text-align: right; }
+    .assistant .label { color: #374151; }
+    .bubble { padding: 12px 16px; border-radius: 12px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+    .user .bubble { background: #6366f1; color: #fff; border-radius: 16px 4px 16px 16px; margin-left: auto; max-width: 80%; }
+    .assistant .bubble { background: #f3f4f6; color: #1f2937; border-radius: 4px 16px 16px 16px; max-width: 80%; border: 1px solid #e5e7eb; }
+    footer { margin-top: 32px; border-top: 1px solid #e5e7eb; padding-top: 12px; font-size: 10px; color: #9ca3af; text-align: center; }
+    @media print { body { padding: 20px 28px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>${platformName}</h1>
+    <span>Exporté le ${dateStr}</span>
+  </header>
+  ${rows}
+  <footer>🔒 Données confidentielles — ${platformName}</footer>
+  <script>window.onload = function(){ window.print(); }<\/script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+  }, [messages, activeAgent, config]);
+
   const activeSuggestions = activeAgent ? activeAgent.suggestions : DEFAULT_SUGGESTIONS;
   const showSuggestions = messages.length === 1 && !isStreaming;
   const displayAgentName = activeAgent ? activeAgent.name : config.agentName;
@@ -738,6 +795,27 @@ export default function ChatInterface() {
                   {knowledgeBase.length}
                 </span>
               )}
+            </button>
+
+            {/* PDF download button */}
+            <button
+              onClick={downloadConversationPDF}
+              disabled={messages.length <= 1}
+              title="Télécharger la conversation en PDF"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+              style={{
+                background: messages.length > 1 ? hexToRgba(primary, 0.08) : "rgba(255,255,255,0.04)",
+                border: `1px solid ${messages.length > 1 ? hexToRgba(primary, 0.25) : "rgba(255,255,255,0.08)"}`,
+                color: messages.length > 1 ? lightPrimary : "rgba(255,255,255,0.2)",
+                cursor: messages.length > 1 ? "pointer" : "not-allowed",
+                transition: "all 0.15s",
+                opacity: messages.length > 1 ? 1 : 0.5,
+              }}
+              onMouseEnter={(e) => { if (messages.length > 1) e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.15)};border-color:${hexToRgba(primary, 0.4)};`; }}
+              onMouseLeave={(e) => { if (messages.length > 1) e.currentTarget.style.cssText += `background:${hexToRgba(primary, 0.08)};border-color:${hexToRgba(primary, 0.25)};`; }}
+            >
+              <IconDownload className="w-3.5 h-3.5" />
+              <span>PDF</span>
             </button>
 
             {/* Config button */}
@@ -1176,6 +1254,13 @@ function IconLayers({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" />
+    </svg>
+  );
+}
+function IconDownload({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
     </svg>
   );
 }
