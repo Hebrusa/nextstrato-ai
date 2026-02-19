@@ -25,12 +25,6 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function lightenColor(hex: string): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgb(${Math.round(r + (255 - r) * 0.52)},${Math.round(g + (255 - g) * 0.52)},${Math.round(b + (255 - b) * 0.52)})`;
-}
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;
@@ -48,7 +42,6 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const lightPrimary = lightenColor(primary);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -111,20 +104,20 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
           bottom: 0,
           width: 380,
           zIndex: 50,
-          background: "#0d0e18",
-          borderLeft: "1px solid rgba(255,255,255,0.07)",
+          background: "#FFFFFF",
+          borderLeft: "1px solid #E4E4EF",
           display: "flex",
           flexDirection: "column",
           overflowY: "auto",
           scrollbarWidth: "thin",
-          scrollbarColor: "rgba(255,255,255,0.06) transparent",
+          scrollbarColor: "rgba(0,0,0,0.08) transparent",
         }}
       >
         {/* Header */}
         <div
           style={{
             padding: "20px 20px 16px",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            borderBottom: "1px solid #E4E4EF",
             display: "flex",
             alignItems: "flex-start",
             justifyContent: "space-between",
@@ -135,24 +128,24 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
               <span style={{ fontSize: 18 }}>📚</span>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: "#ffffff", margin: 0 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: "#0F0F18", margin: 0 }}>
                 Base de connaissances
               </h2>
             </div>
-            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", margin: 0, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 12, color: "#71718A", margin: 0, lineHeight: 1.5 }}>
               Ces documents sont disponibles dans toutes vos conversations.
             </p>
           </div>
           <button
             onClick={onClose}
             style={{
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: "#F5F5FA",
+              border: "1px solid #E4E4EF",
               borderRadius: 8,
               width: 30,
               height: 30,
               cursor: "pointer",
-              color: "rgba(255,255,255,0.5)",
+              color: "#71718A",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -175,9 +168,9 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
                 width: "100%",
                 padding: "12px 16px",
                 borderRadius: 10,
-                border: `1.5px dashed ${docs.length >= MAX_KB_DOCS ? "rgba(255,255,255,0.1)" : hexToRgba(primary, 0.4)}`,
-                background: docs.length >= MAX_KB_DOCS ? "rgba(255,255,255,0.03)" : hexToRgba(primary, 0.06),
-                color: docs.length >= MAX_KB_DOCS ? "rgba(255,255,255,0.25)" : lightPrimary,
+                border: `1.5px dashed ${docs.length >= MAX_KB_DOCS ? "#E4E4EF" : hexToRgba(primary, 0.4)}`,
+                background: docs.length >= MAX_KB_DOCS ? "#F5F5FA" : hexToRgba(primary, 0.06),
+                color: docs.length >= MAX_KB_DOCS ? "#71718A" : primary,
                 cursor: docs.length >= MAX_KB_DOCS || isParsing ? "not-allowed" : "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -206,7 +199,7 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
               style={{ display: "none" }}
               onChange={handleFile}
             />
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.22)", textAlign: "center", marginTop: 6, marginBottom: 0 }}>
+            <p style={{ fontSize: 11, color: "#71718A", textAlign: "center", marginTop: 6, marginBottom: 0 }}>
               PDF, TXT, CSV, Excel · Max {MAX_KB_DOCS} documents
             </p>
           </div>
@@ -223,10 +216,10 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
               background: "rgba(239,68,68,0.1)",
               border: "1px solid rgba(239,68,68,0.25)",
             }}>
-              <span style={{ fontSize: 12, color: "#fca5a5" }}>⚠ {uploadError}</span>
+              <span style={{ fontSize: 12, color: "#dc2626" }}>⚠ {uploadError}</span>
               <button
                 onClick={() => setUploadError(null)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.3)", fontSize: 12 }}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#71718A", fontSize: 12 }}
               >✕</button>
             </div>
           )}
@@ -241,7 +234,7 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
               justifyContent: "center",
               gap: 10,
               padding: "40px 0",
-              color: "rgba(255,255,255,0.2)",
+              color: "#71718A",
             }}>
               <span style={{ fontSize: 36 }}>📂</span>
               <p style={{ fontSize: 13, margin: 0, textAlign: "center", lineHeight: 1.5 }}>
@@ -252,10 +245,10 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.3)", margin: 0 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#71718A", margin: 0 }}>
                   Documents ({docs.length}/{MAX_KB_DOCS})
                 </p>
-                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", margin: 0 }}>
+                <p style={{ fontSize: 11, color: "#71718A", margin: 0 }}>
                   {formatSize(totalSize)} total
                 </p>
               </div>
@@ -266,8 +259,8 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
                   style={{
                     padding: "12px 14px",
                     borderRadius: 10,
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.07)",
+                    background: "#F5F5FA",
+                    border: "1px solid #E4E4EF",
                     display: "flex",
                     alignItems: "center",
                     gap: 10,
@@ -295,7 +288,7 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
                     <p style={{
                       fontSize: 13,
                       fontWeight: 500,
-                      color: "#e8eaf0",
+                      color: "#0F0F18",
                       margin: 0,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -303,7 +296,7 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
                     }}>
                       {doc.name}
                     </p>
-                    <p style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", margin: "3px 0 0" }}>
+                    <p style={{ fontSize: 11, color: "#71718A", margin: "3px 0 0" }}>
                       {formatSize(doc.sizeBytes)} · Ajouté le {formatDate(doc.addedAt)}
                     </p>
                   </div>
@@ -316,7 +309,7 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
                       background: "none",
                       border: "none",
                       cursor: "pointer",
-                      color: "rgba(255,255,255,0.2)",
+                      color: "#71718A",
                       padding: "4px",
                       borderRadius: 6,
                       display: "flex",
@@ -326,7 +319,7 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
                       transition: "all 0.12s",
                     }}
                     onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.cssText += "color:rgba(239,68,68,0.8);background:rgba(239,68,68,0.1);")}
-                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.cssText += "color:rgba(255,255,255,0.2);background:none;")}
+                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.cssText += "color:#71718A;background:none;")}
                   >
                     <svg viewBox="0 0 24 24" style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" />
@@ -341,10 +334,10 @@ export default function KnowledgeBasePanel({ docs, primary, onAdd, onRemove, onC
         {/* Footer tip */}
         <div style={{
           padding: "14px 20px",
-          borderTop: "1px solid rgba(255,255,255,0.05)",
+          borderTop: "1px solid #E4E4EF",
           flexShrink: 0,
         }}>
-          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", lineHeight: 1.6, margin: 0 }}>
+          <p style={{ fontSize: 11, color: "#71718A", lineHeight: 1.6, margin: 0 }}>
             💡 Les documents sont stockés localement dans votre navigateur et injectés automatiquement dans chaque conversation.
           </p>
         </div>
