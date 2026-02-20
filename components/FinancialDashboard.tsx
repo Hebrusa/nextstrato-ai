@@ -395,7 +395,9 @@ Sois précis, chiffré et directement actionnable. Réponds en français.`;
               <div>
                 <h2 style={{ fontSize: 15, fontWeight: 700, color: "#0F0F18", margin: 0 }}>Dashboard Financier DAF</h2>
                 <p style={{ fontSize: 11, color: "#71718A", margin: "2px 0 0" }}>
-                  {documents.length} fichier{documents.length > 1 ? "s" : ""} analysé{documents.length > 1 ? "s" : ""} · {documents.map((d) => d.name).join(", ")}
+                  {documents.length === 0
+                    ? "Chargez un fichier CSV ou Excel pour commencer"
+                    : `${documents.length} fichier${documents.length > 1 ? "s" : ""} analysé${documents.length > 1 ? "s" : ""} · ${documents.map((d) => d.name).join(", ")}`}
                 </p>
               </div>
             </div>
@@ -420,6 +422,25 @@ Sois précis, chiffré et directement actionnable. Réponds en français.`;
 
           {/* Content */}
           <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", scrollbarWidth: "thin", scrollbarColor: "rgba(0,0,0,0.08) transparent" }}>
+
+            {/* ── No documents ── */}
+            {documents.length === 0 && (
+              <div style={{ textAlign: "center", padding: "60px 0" }}>
+                <p style={{ fontSize: 44, margin: 0 }}>📂</p>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0F0F18", margin: "16px 0 8px" }}>Chargez vos données financières</h3>
+                <p style={{ fontSize: 13, color: "#71718A", lineHeight: 1.7, margin: "0 auto", maxWidth: 380 }}>
+                  Utilisez le bouton 📎 dans la zone de saisie pour joindre un fichier CSV ou Excel.<br />
+                  Le dashboard détectera automatiquement vos indicateurs.
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 20 }}>
+                  {["CA / Marge brute / EBITDA", "Trésorerie / BFR / DSO / DPO", "Filiale / BU / Entité"].map((hint) => (
+                    <span key={hint} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 20, background: hexToRgba(primary, 0.07), border: `1px solid ${hexToRgba(primary, 0.2)}`, color: primary }}>
+                      {hint}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* ── Tab KPIs ── */}
             {tab === "kpis" && data && (

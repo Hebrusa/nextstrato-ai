@@ -458,7 +458,7 @@ ${rows}
 
       {showConfig && <ConfigPanel config={config} onChange={updateConfig} onClose={() => setShowConfig(false)} onReset={resetConfig} />}
       {showDataViz && documents.length >= 1 && <DataVizModal documents={documents} primary={primary} onClose={() => setShowDataViz(false)} />}
-      {showFinancialDashboard && documents.length >= 1 && <FinancialDashboard documents={documents} primary={primary} onClose={() => setShowFinancialDashboard(false)} />}
+      {showFinancialDashboard && <FinancialDashboard documents={documents} primary={primary} onClose={() => setShowFinancialDashboard(false)} />}
       {showKB && <KnowledgeBasePanel docs={knowledgeBase} primary={primary} onAdd={addKBDoc} onRemove={removeKBDoc} onClose={() => setShowKB(false)} />}
 
       {/* ════ SIDEBAR ════ */}
