@@ -246,6 +246,7 @@ export default function ChatInterface() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showDataViz, setShowDataViz] = useState(false);
   const [showDocPanel, setShowDocPanel] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -586,7 +587,7 @@ ${rows}
       </aside>
 
       {/* ════ MAIN ════ */}
-      <div className="flex flex-col flex-1 min-w-0">
+      <div className="flex flex-col flex-1 min-w-0" style={isFullscreen ? { position: "fixed", inset: 0, zIndex: 30, background: config.backgroundColor } : {}}>
 
         <header style={{ background: "rgba(255,255,255,0.92)", borderBottom: "1px solid #E4E4EF", backdropFilter: "blur(12px)" }} className="flex items-center justify-between px-6 py-4 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -673,6 +674,17 @@ ${rows}
             </button>
 
             <button
+              onClick={() => setIsFullscreen((v) => !v)}
+              title={isFullscreen ? "Quitter le plein écran" : "Plein écran"}
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-all"
+              style={{ color: isFullscreen ? primary : "#71718A", background: isFullscreen ? hexToRgba(primary, 0.08) : "transparent", border: isFullscreen ? `1px solid ${hexToRgba(primary, 0.2)}` : "1px solid transparent" }}
+              onMouseEnter={(e) => { if (!isFullscreen) { e.currentTarget.style.background = "#F5F5FA"; e.currentTarget.style.color = "#0F0F18"; } }}
+              onMouseLeave={(e) => { if (!isFullscreen) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#71718A"; } }}
+            >
+              {isFullscreen ? <IconCompress className="w-4 h-4" /> : <IconExpand className="w-4 h-4" />}
+            </button>
+
+            <button
               onClick={clearConversation}
               title="Nouvelle conversation"
               className="w-8 h-8 rounded-lg flex items-center justify-center transition-all"
@@ -686,7 +698,7 @@ ${rows}
         </header>
 
         <div className="flex-1 overflow-y-auto px-4 py-8" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(0,0,0,0.08) transparent" }}>
-          <div className="max-w-3xl mx-auto space-y-5">
+          <div className={`${isFullscreen ? "max-w-5xl" : "max-w-4xl"} mx-auto space-y-5`}>
             {messages.map((msg) => (
               <MessageBubble key={msg.id} msg={msg} isCurrentlyStreaming={isStreaming && msg.id === streamingIdRef.current} primary={primary} />
             ))}
@@ -715,7 +727,7 @@ ${rows}
         </div>
 
         <div className="px-4 pb-6 pt-2 flex-shrink-0">
-          <div className="max-w-3xl mx-auto">
+          <div className={`${isFullscreen ? "max-w-5xl" : "max-w-4xl"} mx-auto`}>
             <input ref={fileInputRef} type="file" accept=".pdf,.txt,.csv,.tsv,.xlsx,.xls" className="hidden" onChange={handleFileChange} />
             <div className="flex items-end gap-3 rounded-2xl px-4 py-3"
               style={{ background: "#F5F5FA", border: "1px solid #E4E4EF" }}
@@ -786,7 +798,7 @@ function MessageBubble({ msg, isCurrentlyStreaming, primary }: { msg: Message; i
           <IconBolt className="w-4 h-4" style={{ color: primary }} />
         </div>
       )}
-      <div className="max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed"
+      <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed"
         style={isUser
           ? { background: primary, color: "#fff", borderRadius: "18px 4px 18px 18px", boxShadow: `0 2px 16px ${hexToRgba(primary, 0.25)}` }
           : { background: "#FFFFFF", border: "1px solid #E4E4EF", color: "#0F0F18", borderRadius: "4px 18px 18px 18px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }
@@ -932,3 +944,5 @@ function IconChartBar({ className }: { className?: string }) { return <svg viewB
 function IconUsers({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>; }
 function IconTrendingUp({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>; }
 function IconLayers({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>; }
+function IconExpand({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg>; }
+function IconCompress({ className }: { className?: string }) { return <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" /></svg>; }
