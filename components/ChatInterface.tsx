@@ -228,6 +228,7 @@ export default function ChatInterface() {
   const [isParsingDoc, setIsParsingDoc] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showDataViz, setShowDataViz] = useState(false);
+  const [showDocPanel, setShowDocPanel] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -479,6 +480,21 @@ ${rows}
       {showConfig && <ConfigPanel config={config} onChange={updateConfig} onClose={() => setShowConfig(false)} onReset={resetConfig} />}
       {showDataViz && documents.length >= 1 && <DataVizModal documents={documents} primary={primary} onClose={() => setShowDataViz(false)} />}
       {showKB && <KnowledgeBasePanel docs={knowledgeBase} primary={primary} onAdd={addKBDoc} onRemove={removeKBDoc} onClose={() => setShowKB(false)} />}
+      {showDocPanel && (
+        <AgentDocPanel
+          agents={AGENTS.map((a) => ({ id: a.id, name: a.name }))}
+          activeAgentId={activeAgent?.id ?? null}
+          agentDocs={agentDocs}
+          primary={primary}
+          isUploading={isParsingDoc}
+          uploadError={uploadError}
+          onUpload={() => fileInputRef.current?.click()}
+          onRemove={removeDocument}
+          onClearError={() => setUploadError(null)}
+          onAnalyze={() => { setShowDataViz(true); setShowDocPanel(false); }}
+          onClose={() => setShowDocPanel(false)}
+        />
+      )}
 
       {/* ════ SIDEBAR ════ */}
       <aside style={{ width: 232, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid #E4E4EF", background: "#FFFFFF", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: "rgba(0,0,0,0.08) transparent" }}>
@@ -573,6 +589,22 @@ ${rows}
               <span className="w-2 h-2 rounded-full" style={{ background: primary }} />
               <span className="text-sm font-medium" style={{ color: primary }}>{displayAgentName}</span>
             </div>
+
+            <button
+              onClick={() => setShowDocPanel((v) => !v)}
+              title="Répertoire de fichiers"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+              style={{ background: showDocPanel || Object.values(agentDocs).some((d) => d.length > 0) ? hexToRgba(primary, 0.08) : "#F5F5FA", border: `1px solid ${showDocPanel || Object.values(agentDocs).some((d) => d.length > 0) ? hexToRgba(primary, 0.3) : "#E4E4EF"}`, color: showDocPanel || Object.values(agentDocs).some((d) => d.length > 0) ? primary : "#71718A", cursor: "pointer", transition: "all 0.15s" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = hexToRgba(primary, 0.12); e.currentTarget.style.borderColor = hexToRgba(primary, 0.4); e.currentTarget.style.color = primary; }}
+              onMouseLeave={(e) => { const hasFiles = Object.values(agentDocs).some((d) => d.length > 0); e.currentTarget.style.background = showDocPanel || hasFiles ? hexToRgba(primary, 0.08) : "#F5F5FA"; e.currentTarget.style.borderColor = showDocPanel || hasFiles ? hexToRgba(primary, 0.3) : "#E4E4EF"; e.currentTarget.style.color = showDocPanel || hasFiles ? primary : "#71718A"; }}
+            >
+              📁 <span>Fichiers</span>
+              {Object.values(agentDocs).reduce((s, d) => s + d.length, 0) > 0 && (
+                <span style={{ background: primary, color: "#fff", borderRadius: "999px", padding: "0 5px", fontSize: 10, fontWeight: 700, lineHeight: "16px" }}>
+                  {Object.values(agentDocs).reduce((s, d) => s + d.length, 0)}
+                </span>
+              )}
+            </button>
 
             <button
               onClick={() => documents.length >= 1 && setShowDataViz(true)}
@@ -698,19 +730,6 @@ ${rows}
           </span>
         </div>
       </div>
-
-      <AgentDocPanel
-        agents={AGENTS.map((a) => ({ id: a.id, name: a.name }))}
-        activeAgentId={activeAgent?.id ?? null}
-        agentDocs={agentDocs}
-        primary={primary}
-        isUploading={isParsingDoc}
-        uploadError={uploadError}
-        onUpload={() => fileInputRef.current?.click()}
-        onRemove={removeDocument}
-        onClearError={() => setUploadError(null)}
-        onAnalyze={() => setShowDataViz(true)}
-      />
     </div>
   );
 }
