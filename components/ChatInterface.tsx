@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import ConfigPanel, { Config, DEFAULT_CONFIG } from "./ConfigPanel";
+import AgentDocPanel from "./AgentDocPanel";
 import DataVizModal, { DocFile } from "./DataVizModal";
 import FinancialDashboard from "./FinancialDashboard";
 import KnowledgeBasePanel, { KBDoc } from "./KnowledgeBasePanel";
@@ -117,6 +118,7 @@ type Conversation = {
 const LS_KEY = "nextstrato-config";
 const LS_HISTORY_KEY = "nextstrato-conversations";
 const LS_KB_KEY = "nextstrato-kb";
+const LS_AGENT_DOCS_KEY = "nextstrato-agent-docs-v1";
 const MAX_SAVED_CONVERSATIONS = 30;
 
 function formatRelativeDate(ts: number): string {
@@ -206,7 +208,25 @@ export default function ChatInterface() {
   ]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [documents, setDocuments] = useState<DocFile[]>([]);
+  const [agentDocs, setAgentDocs] = useState<Record<string, DocFile[]>>(() => {
+    if (typeof window === "undefined") return {};
+    try { const raw = localStorage.getItem(LS_AGENT_DOCS_KEY); return raw ? JSON.parse(raw) : {}; }
+    catch { return {}; }
+  });
+  const agentDocsRef = useRef(agentDocs);
+  useEffect(() => { agentDocsRef.current = agentDocs; }, [agentDocs]);
+
+  const agentKey = activeAgent?.id ?? "general";
+  const documents = agentDocs[agentKey] ?? [];
+
+  const updateDocsForAgent = (key: string, docs: DocFile[]) => {
+    setAgentDocs((prev) => {
+      const next = { ...prev, [key]: docs };
+      try { localStorage.setItem(LS_AGENT_DOCS_KEY, JSON.stringify(next)); } catch { /* quota */ }
+      return next;
+    });
+  };
+
   const [isParsingDoc, setIsParsingDoc] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showDataViz, setShowDataViz] = useState(false);
@@ -273,7 +293,6 @@ export default function ChatInterface() {
     currentConversationIdRef.current = conv.id;
     const agent = AGENTS.find((a) => a.id === conv.agentId) ?? null;
     setActiveAgent(agent);
-    setDocuments([]);
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   }, []);
@@ -309,7 +328,9 @@ export default function ChatInterface() {
       if (!res.ok || data.error) {
         setUploadError(data.error ?? `Erreur ${res.status} lors du traitement du fichier.`);
       } else if (data.text) {
-        setDocuments((prev) => [...prev, { name: data.name ?? file.name, text: data.text! }].slice(-5));
+        const key = activeAgentRef.current?.id ?? "general";
+        const cur = agentDocsRef.current[key] ?? [];
+        updateDocsForAgent(key, [...cur, { name: data.name ?? file.name, text: data.text! }].slice(-5));
       } else {
         setUploadError("Le fichier semble vide ou illisible.");
       }
@@ -320,8 +341,10 @@ export default function ChatInterface() {
       e.target.value = "";
     }
   };
-  const removeDocument = (index: number) =>
-    setDocuments((prev) => prev.filter((_, i) => i !== index));
+  const removeDocument = (agentId: string, index: number) => {
+    const cur = agentDocsRef.current[agentId] ?? [];
+    updateDocsForAgent(agentId, cur.filter((_, i) => i !== index));
+  };
 
   /* ── Send message ── */
   const sendMessage = useCallback(async (text: string) => {
@@ -337,8 +360,9 @@ export default function ChatInterface() {
     const kbContext = knowledgeBase.length > 0
       ? knowledgeBase.map((d, i) => `Document ${i + 1} — "${d.name}" :\n\n${d.text}`).join("\n\n---\n\n")
       : null;
-    const docContext = documents.length > 0
-      ? documents.map((d, i) => `Document ${i + 1} — "${d.name}" :\n\n${d.text}`).join("\n\n---\n\n")
+    const currentDocs = agentDocsRef.current[activeAgentRef.current?.id ?? "general"] ?? [];
+    const docContext = currentDocs.length > 0
+      ? currentDocs.map((d, i) => `Document ${i + 1} — "${d.name}" :\n\n${d.text}`).join("\n\n---\n\n")
       : null;
     const effectiveSystemPrompt = [
       basePrompt,
@@ -385,7 +409,7 @@ export default function ChatInterface() {
       streamingIdRef.current = null;
       saveConversation(messagesRef.current);
     }
-  }, [messages, isStreaming, documents, knowledgeBase, saveConversation]);
+  }, [messages, isStreaming, knowledgeBase, saveConversation]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
@@ -401,7 +425,6 @@ export default function ChatInterface() {
     setCurrentConversationId(null);
     currentConversationIdRef.current = null;
     setInput("");
-    setDocuments([]);
     setActiveAgent(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   }, []);
@@ -650,57 +673,12 @@ ${rows}
 
         <div className="px-4 pb-6 pt-2 flex-shrink-0">
           <div className="max-w-3xl mx-auto">
-            {uploadError && (
-              <div className="flex items-center gap-2 mb-2 px-1">
-                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "#dc2626" }}>⚠ {uploadError}</span>
-                <button onClick={() => setUploadError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#71718A", fontSize: 11 }}>✕</button>
-              </div>
-            )}
-            {documents.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 mb-2 px-1">
-                {documents.map((doc, i) => {
-                  const BADGE = [
-                    { bg: hexToRgba(primary, 0.08), border: hexToRgba(primary, 0.25), color: primary },
-                    { bg: "rgba(6,182,212,0.08)", border: "rgba(6,182,212,0.25)", color: "#0ea5e9" },
-                    { bg: "rgba(139,92,246,0.08)", border: "rgba(139,92,246,0.25)", color: "#8B5CF6" },
-                    { bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.25)", color: "#059669" },
-                    { bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.25)", color: "#D97706" },
-                  ];
-                  const b = BADGE[i % BADGE.length];
-                  return (
-                    <span key={i} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
-                      style={{ background: b.bg, border: `1px solid ${b.border}`, color: b.color }}>
-                      📎
-                      <span style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</span>
-                      <button onClick={() => removeDocument(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", opacity: 0.6, padding: 0, lineHeight: 1, fontSize: 11 }}>✕</button>
-                    </span>
-                  );
-                })}
-                {documents.length >= 1 && (
-                  <button onClick={() => setShowDataViz(true)} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
-                    style={{ background: hexToRgba(primary, 0.1), border: `1px solid ${hexToRgba(primary, 0.35)}`, color: primary, cursor: "pointer" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = hexToRgba(primary, 0.18))}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = hexToRgba(primary, 0.1))}
-                  >📊 Analyser</button>
-                )}
-              </div>
-            )}
-
+            <input ref={fileInputRef} type="file" accept=".pdf,.txt,.csv,.tsv,.xlsx,.xls" className="hidden" onChange={handleFileChange} />
             <div className="flex items-end gap-3 rounded-2xl px-4 py-3"
               style={{ background: "#F5F5FA", border: "1px solid #E4E4EF" }}
               onFocusCapture={(e) => ((e.currentTarget as HTMLElement).style.borderColor = hexToRgba(primary, 0.45))}
               onBlurCapture={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "#E4E4EF")}
             >
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isStreaming || isParsingDoc}
-                className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
-                style={{ color: documents.length > 0 ? primary : "#71718A", background: documents.length > 0 ? hexToRgba(primary, 0.08) : "transparent", opacity: isStreaming || isParsingDoc || documents.length >= 5 ? 0.4 : 1, cursor: isStreaming || isParsingDoc || documents.length >= 5 ? "not-allowed" : "pointer" }}
-                title={documents.length >= 5 ? "5 fichiers maximum" : "Joindre un fichier PDF, TXT ou CSV"}
-                onMouseEnter={(e) => { if (!isStreaming && !isParsingDoc && documents.length < 5) { e.currentTarget.style.color = "#0F0F18"; e.currentTarget.style.background = "#E4E4EF"; } }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = documents.length > 0 ? primary : "#71718A"; e.currentTarget.style.background = documents.length > 0 ? hexToRgba(primary, 0.08) : "transparent"; }}
-              >
-                {isParsingDoc ? <IconSpinner className="w-4 h-4" /> : <IconPaperclip className="w-4 h-4" />}
-              </button>
-              <input ref={fileInputRef} type="file" accept=".pdf,.txt,.csv,.tsv,.xlsx,.xls" className="hidden" onChange={handleFileChange} />
               <textarea ref={textareaRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} onInput={handleInput}
                 placeholder={activeAgent ? `Posez votre question au ${activeAgent.name}…` : `Posez votre question à ${config.agentName}…`}
                 rows={1} disabled={isStreaming}
@@ -727,6 +705,20 @@ ${rows}
           </span>
         </div>
       </div>
+
+      <AgentDocPanel
+        agents={AGENTS.map((a) => ({ id: a.id, name: a.name }))}
+        activeAgentId={activeAgent?.id ?? null}
+        agentDocs={agentDocs}
+        primary={primary}
+        isUploading={isParsingDoc}
+        uploadError={uploadError}
+        onUpload={() => fileInputRef.current?.click()}
+        onRemove={removeDocument}
+        onClearError={() => setUploadError(null)}
+        onAnalyze={() => setShowDataViz(true)}
+        onDashboard={() => setShowFinancialDashboard(true)}
+      />
     </div>
   );
 }
