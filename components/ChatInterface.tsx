@@ -364,6 +364,7 @@ export default function ChatInterface() {
       : null;
     const effectiveSystemPrompt = [
       basePrompt,
+      `\n\nRègle de formatage : Structure tes réponses avec des bullet points (• ou -), des emojis pertinents pour introduire les sections, et du **gras** pour mettre en valeur les chiffres clés et informations importantes. N'utilise jamais de titres ### ni de ## . Privilégie une présentation aérée et lisible.`,
       kbContext ? `\n\nBase de connaissances (documents permanents disponibles) :\n\n${kbContext}\n\nUtilise ces documents comme référence fiable pour répondre aux questions.` : null,
       docContext ? `\n\nDocuments joints à cette conversation :\n\n${docContext}\n\nUtilise ces documents pour répondre aux questions si c'est pertinent.` : null,
     ].filter(Boolean).join("");
@@ -774,10 +775,68 @@ function MessageBubble({ msg, isCurrentlyStreaming, primary }: { msg: Message; i
           : { background: "#FFFFFF", border: "1px solid #E4E4EF", color: "#0F0F18", borderRadius: "4px 18px 18px 18px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }
         }
       >
-        {isCurrentlyStreaming && msg.content === "" ? <TypingIndicator primary={primary} /> : <p className="whitespace-pre-wrap">{msg.content}</p>}
+        {isCurrentlyStreaming && msg.content === ""
+          ? <TypingIndicator primary={primary} />
+          : isUser
+            ? <p className="whitespace-pre-wrap">{msg.content}</p>
+            : <div className="whitespace-pre-wrap">{renderMarkdown(msg.content)}</div>
+        }
       </div>
     </div>
   );
+}
+
+function renderInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*\n]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith("**") && part.endsWith("**") && part.length > 4
+          ? <strong key={i} style={{ fontWeight: 700 }}>{part.slice(2, -2)}</strong>
+          : part
+      )}
+    </>
+  );
+}
+
+function renderMarkdown(text: string): React.ReactNode {
+  const lines = text.split("\n");
+  const result: React.ReactNode[] = [];
+  let listItems: string[] = [];
+  let listKey = 0;
+
+  const flushList = () => {
+    if (listItems.length === 0) return;
+    result.push(
+      <ul key={`ul-${listKey++}`} style={{ margin: "4px 0", padding: 0, listStyle: "none" }}>
+        {listItems.map((item, i) => (
+          <li key={i} style={{ display: "flex", gap: 7, marginBottom: 3, alignItems: "flex-start" }}>
+            <span style={{ flexShrink: 0, opacity: 0.5, marginTop: 1 }}>•</span>
+            <span>{renderInline(item)}</span>
+          </li>
+        ))}
+      </ul>
+    );
+    listItems = [];
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^[-*•]\s/.test(line)) {
+      listItems.push(line.replace(/^[-*•]\s+/, ""));
+    } else {
+      flushList();
+      if (line.trim() === "") {
+        if (result.length > 0) result.push(<div key={`br-${i}`} style={{ height: 6 }} />);
+      } else {
+        result.push(
+          <div key={`l-${i}`} style={{ marginBottom: 1 }}>{renderInline(line)}</div>
+        );
+      }
+    }
+  }
+  flushList();
+  return <>{result}</>;
 }
 
 function TypingIndicator({ primary }: { primary: string }) {
