@@ -29,20 +29,23 @@ function fmtPct(v: number): string {
   return `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 }
 
-/* ── KPI Pattern matching ── */
+/* ── KPI patterns — used for both column headers (horizontal) and row labels (vertical) ── */
 const P = {
-  ca: /chiffre.?d.?affaires|^ca$|^revenue$|^ventes?$|^sales$/i,
-  margeBrute: /marge.?brute|gross.?margin/i,
-  ebitda: /ebitda|excédent.?brut/i,
-  resultatNet: /résultat.?net|net.?income|bénéfice.?net/i,
-  tresorerie: /trésorerie|^cash$|liquidités?|disponibilités?/i,
-  bfr: /^bfr$|besoin.?fonds|working.?capital/i,
-  dso: /^dso$|délai.?clients?|jours.?clients?/i,
-  dpo: /^dpo$|délai.?fournisseurs?|jours.?four/i,
-  budget: /budget/i,
-  nMoins1: /n-1|n\.1|année.?préc|previous/i,
-  entite: /filiale|entité|bu\b|business.?unit|département|direction|société/i,
+  ca: /chiffre.?d.?affaires|chiffre.?affaires|\bca\b|\bventes?\b|\brevenue\b|\bsales\b|\bturnover\b/i,
+  margeBrute: /marge.?brute|gross.?margin|\bmb\b/i,
+  ebitda: /\bebitda\b|\bebe\b|excédent.?brut|excedent.?brut/i,
+  resultatNet: /résultat.?net|resultat.?net|net.?income|bénéfice.?net|benefice.?net|profit.?net|\brn\b/i,
+  tresorerie: /trésorerie|tresorerie|disponibilités?|disponibilites?|\bcash\b|solde.?tréso|position.?tréso/i,
+  bfr: /\bbfr\b|besoin.?fonds|working.?capital|fonds.?roulement/i,
+  dso: /\bdso\b|délai.?moyen.?client|delai.?moyen.?client|jours.?client|\bjcp\b|créances.?client/i,
+  dpo: /\bdpo\b|délai.?moyen.?four|delai.?moyen.?four|jours.?four|\bjcf\b|dettes.?four/i,
+  entite: /filiale|entité|entite|\bbu\b|business.?unit|département|departement|direction|société|societe/i,
 };
+
+/* ── Column header patterns for period detection ── */
+const H_REEL = /^(réel|reel|réalisé|realise|actual|ytd|cumul|mois|période|periode|montant|valeur|jan|fev|mar|avr|mai|jun|jul|aou|sep|oct|nov|dec)$/i;
+const H_BUDGET = /^(budget|objectif|obj|prévision|prevision|forecast|cible|plan|budg)$/i;
+const H_N1 = /^(n.?1|n\s*moins\s*1|n-1|précédent|precedent|previous|last.?year|exercice.?prec|année.?prec)$/i;
 
 /* ── Types ── */
 type KpiValue = { reel: number | null; budget: number | null; nMoins1: number | null };
@@ -58,23 +61,56 @@ type ParsedData = {
 
 /* ── CSV Parsing ── */
 function parseCsv(text: string): Record<string, string>[] {
-  const lines = text.trim().split("\n").filter(Boolean);
+  const lines = text.trim().split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
-  const delim = lines[0].includes(";") ? ";" : lines[0].includes("\t") ? "\t" : ",";
-  const headers = lines[0].split(delim).map((h) => h.trim().replace(/^"|"$/g, ""));
+  const sample = lines[0];
+  const delim = sample.split(";").length > sample.split(",").length ? ";" : sample.includes("\t") ? "\t" : ",";
+  const headers = lines[0].split(delim).map((h) => h.trim().replace(/^["']|["']$/g, "").trim());
   return lines.slice(1).map((line) => {
-    const cells = line.split(delim).map((c) => c.trim().replace(/^"|"$/g, ""));
+    const cells = line.split(delim).map((c) => c.trim().replace(/^["']|["']$/g, "").trim());
     const row: Record<string, string> = {};
-    headers.forEach((h, i) => { row[h] = cells[i] ?? ""; });
+    headers.forEach((h, i) => { if (h) row[h] = cells[i] ?? ""; });
     return row;
-  });
+  }).filter((r) => Object.values(r).some((v) => v !== ""));
 }
 
+/* ── Robust number parser: handles K/M, comma/dot separators, parentheses for negatives ── */
 function parseNum(s: string): number | null {
-  if (!s) return null;
-  const cleaned = s.replace(/\s/g, "").replace(",", ".").replace(/[^0-9.\-]/g, "");
-  const n = parseFloat(cleaned);
-  return isNaN(n) ? null : n;
+  if (!s || typeof s !== "string") return null;
+  const raw = s.trim();
+  if (!raw || /^[-–]$/.test(raw) || /^(n\/a|n\.a\.|nd|n\/d|#|\/|\s*)$/i.test(raw)) return null;
+
+  const isNeg = raw.startsWith("(") && raw.endsWith(")"); // accounting negative: (123)
+  const hasM = /[Mm]€?$/.test(raw.replace(/\s/g, ""));
+  const hasK = /[Kk]€?$/.test(raw.replace(/\s/g, ""));
+  const mult = hasM ? 1_000_000 : hasK ? 1_000 : 1;
+
+  let c = raw.replace(/[()]/g, "").replace(/[€$£%\s]/g, "").replace(/[KkMm]€?$/, "").trim();
+
+  // Detect decimal vs thousands separator
+  const hasDot = c.includes(".");
+  const hasComma = c.includes(",");
+  if (hasDot && hasComma) {
+    if (c.lastIndexOf(",") > c.lastIndexOf(".")) {
+      c = c.replace(/\./g, "").replace(",", "."); // "1.234,56" → "1234.56"
+    } else {
+      c = c.replace(/,/g, ""); // "1,234.56" → "1234.56"
+    }
+  } else if (hasComma) {
+    const parts = c.split(",");
+    c = (parts.length === 2 && parts[1].length <= 2 && parts[0].length <= 3)
+      ? c.replace(",", ".") // "1,5" → decimal
+      : c.replace(/,/g, ""); // "1,234" or "1,234,567" → thousands
+  } else if (hasDot) {
+    const parts = c.split(".");
+    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3 && parts[0].length <= 3)) {
+      c = c.replace(/\./g, ""); // "1.234" → thousands
+    }
+  }
+
+  const n = parseFloat(c);
+  if (isNaN(n)) return null;
+  return (isNeg ? -Math.abs(n) : n) * mult;
 }
 
 function findCol(headers: string[], pattern: RegExp): string | null {
@@ -83,52 +119,131 @@ function findCol(headers: string[], pattern: RegExp): string | null {
 
 function sumCol(rows: Record<string, string>[], col: string): number | null {
   let total = 0, found = false;
-  for (const row of rows) {
-    const v = parseNum(row[col]);
-    if (v !== null) { total += v; found = true; }
-  }
+  for (const row of rows) { const v = parseNum(row[col]); if (v !== null) { total += v; found = true; } }
   return found ? total : null;
 }
 
 function avgCol(rows: Record<string, string>[], col: string): number | null {
   let total = 0, count = 0;
-  for (const row of rows) {
-    const v = parseNum(row[col]);
-    if (v !== null) { total += v; count++; }
-  }
+  for (const row of rows) { const v = parseNum(row[col]); if (v !== null) { total += v; count++; } }
   return count > 0 ? total / count : null;
 }
 
-/* ── Main parsing function ── */
-function parseData(docs: DocFile[]): ParsedData {
-  const allRows: Record<string, string>[] = [];
-  for (const doc of docs) allRows.push(...parseCsv(doc.text));
+/* ── Build variances from KPI map ── */
+function buildVariances(kpis: ParsedData["kpis"]): ParsedData["variances"] {
+  const KPI_LABELS: Record<string, string> = {
+    ca: "Chiffre d'affaires", margeBrute: "Marge brute", ebitda: "EBITDA",
+    resultatNet: "Résultat net", tresorerie: "Trésorerie", bfr: "BFR",
+  };
+  const REVENUE = new Set(["ca", "margeBrute", "ebitda", "resultatNet", "tresorerie"]);
+  const variances: ParsedData["variances"] = [];
+  for (const [key, kpi] of Object.entries(kpis)) {
+    if (!KPI_LABELS[key] || kpi.reel === null) continue;
+    const ref = kpi.budget ?? kpi.nMoins1;
+    if (ref === null || ref === 0) continue;
+    const ecart = kpi.reel - ref;
+    const pct = (ecart / Math.abs(ref)) * 100;
+    variances.push({
+      label: `${KPI_LABELS[key]} (${kpi.budget !== null ? "vs Budget" : "vs N-1"})`,
+      ecart, pct,
+      isGood: REVENUE.has(key) ? ecart >= 0 : ecart <= 0,
+      isAlert: Math.abs(pct) > 10,
+    });
+  }
+  return variances.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 6);
+}
+
+/* ── Empty KPI structure ── */
+function emptyKpi(): KpiValue { return { reel: null, budget: null, nMoins1: null }; }
+function emptyKpis(): ParsedData["kpis"] {
+  return { ca: emptyKpi(), margeBrute: emptyKpi(), ebitda: emptyKpi(), resultatNet: emptyKpi(), tresorerie: emptyKpi(), bfr: emptyKpi(), dso: emptyKpi(), dpo: emptyKpi() };
+}
+
+/* ── VERTICAL format: rows = KPIs, columns = Réel / Budget / N-1 ── */
+function parseVertical(rows: Record<string, string>[], headers: string[]): ParsedData | null {
+  const labelCol = headers[0];
+
+  // Find which rows correspond to which KPIs
+  const KPI_KEYS = Object.keys(P).filter((k) => k !== "entite") as (keyof typeof P)[];
+  const rowMap: Partial<Record<keyof typeof P, number>> = {};
+  rows.forEach((row, i) => {
+    const lbl = (row[labelCol] ?? "").trim();
+    if (!lbl) return;
+    for (const key of KPI_KEYS) {
+      if (!(key in rowMap) && P[key].test(lbl)) rowMap[key] = i;
+    }
+  });
+
+  if (Object.keys(rowMap).length < 2) return null; // not enough KPIs detected → not vertical
+
+  // Find value columns
+  const numCols = headers.slice(1).filter((h) => rows.some((r) => parseNum(r[h]) !== null));
+  const reelCols = numCols.filter((h) => H_REEL.test(h.trim()));
+  const budgetCols = numCols.filter((h) => H_BUDGET.test(h.trim()));
+  const n1Cols = numCols.filter((h) => H_N1.test(h.trim()));
+
+  // If no explicit Réel column, use all numeric columns that are not budget/n-1
+  const valueCols = reelCols.length > 0
+    ? reelCols
+    : numCols.filter((h) => !H_BUDGET.test(h.trim()) && !H_N1.test(h.trim()));
+
+  if (valueCols.length === 0) return null;
+
+  const getVal = (rowIdx: number | undefined, cols: string[], isDays: boolean): number | null => {
+    if (rowIdx === undefined || cols.length === 0) return null;
+    const vals = cols.map((c) => parseNum(rows[rowIdx]?.[c])).filter((v): v is number => v !== null);
+    if (vals.length === 0) return null;
+    if (isDays) return vals.reduce((a, b) => a + b, 0) / vals.length;
+    return vals.reduce((a, b) => a + b, 0);
+  };
+
+  const mk = (key: keyof typeof P, isDays = false): KpiValue => ({
+    reel: getVal(rowMap[key], valueCols, isDays),
+    budget: getVal(rowMap[key], budgetCols, isDays),
+    nMoins1: getVal(rowMap[key], n1Cols, isDays),
+  });
+
+  const kpis = {
+    ca: mk("ca"), margeBrute: mk("margeBrute"), ebitda: mk("ebitda"),
+    resultatNet: mk("resultatNet"), tresorerie: mk("tresorerie"), bfr: mk("bfr"),
+    dso: mk("dso", true), dpo: mk("dpo", true),
+  };
+
+  return { kpis, entities: [], variances: buildVariances(kpis) };
+}
+
+/* ── HORIZONTAL format: columns = KPIs, rows = data points ── */
+function parseHorizontal(
+  allRows: Record<string, string>[],
+  docs: DocFile[]
+): ParsedData {
+  // If 2 docs with same structure → first = Réel, second = Budget or N-1
+  const doc1Rows = parseCsv(docs[0]?.text ?? "");
+  const doc2Rows = docs.length > 1 ? parseCsv(docs[1]?.text ?? "") : [];
 
   const headers = allRows.length > 0 ? Object.keys(allRows[0]) : [];
 
-  // Detect type column (Réel / Budget / N-1 rows)
-  const typeCol = headers.find((h) => /^type$|^catégorie$|^nature$|^indicateur$|^période$/i.test(h));
-  let reelRows = allRows;
-  let budgetRows: Record<string, string>[] = [];
-  let n1Rows: Record<string, string>[] = [];
+  // Type column (rows tagged Réel/Budget/N-1)
+  const typeCol = headers.find((h) => /^(type|catégorie|categorie|nature|indicateur|période|periode)$/i.test(h));
+  let reelRows = allRows, budgetRows: Record<string, string>[] = [], n1Rows: Record<string, string>[] = [];
   if (typeCol) {
-    reelRows = allRows.filter((r) => /réel|actual|reel/i.test(r[typeCol] ?? ""));
+    reelRows = allRows.filter((r) => /réel|reel|actual/i.test(r[typeCol] ?? ""));
     budgetRows = allRows.filter((r) => /budget/i.test(r[typeCol] ?? ""));
-    n1Rows = allRows.filter((r) => /n-1|n\.1|précédent|previous/i.test(r[typeCol] ?? ""));
+    n1Rows = allRows.filter((r) => /n-1|précédent|precedent|previous/i.test(r[typeCol] ?? ""));
     if (reelRows.length === 0) reelRows = allRows;
   }
 
-  // Column detection
-  const caReelCol = headers.find((h) => /ca.?réel|réel.?ca|chiffre.?réel|ventes.?réel/i.test(h))
-    ?? findCol(headers, P.ca);
-  const caBudgetCol = headers.find((h) => /ca.?budget|budget.?ca|chiffre.?budget/i.test(h)) ?? null;
-  const caN1Col = headers.find((h) => /ca.?n-1|n-1.?ca/i.test(h)) ?? null;
-  const margeReelCol = headers.find((h) => /marge.?réel|réel.?marge/i.test(h))
-    ?? findCol(headers, P.margeBrute);
-  const margeBudgetCol = headers.find((h) => /marge.?budget|budget.?marge/i.test(h)) ?? null;
-  const ebitdaReelCol = headers.find((h) => /ebitda.?réel|réel.?ebitda/i.test(h))
-    ?? findCol(headers, P.ebitda);
-  const ebitdaBudgetCol = headers.find((h) => /ebitda.?budget|budget.?ebitda/i.test(h)) ?? null;
+  // Detect combined columns: "CA Réel", "CA Budget"
+  const special = (pat: RegExp, suffix: RegExp) =>
+    headers.find((h) => pat.test(h) && suffix.test(h)) ?? null;
+
+  const caReelCol = special(P.ca, /réel|reel|actual/i) ?? findCol(headers, P.ca);
+  const caBudgetCol = special(P.ca, /budget/i) ?? null;
+  const caN1Col = special(P.ca, /n-1|precedent/i) ?? null;
+  const margeReelCol = special(P.margeBrute, /réel|reel|actual/i) ?? findCol(headers, P.margeBrute);
+  const margeBudgetCol = special(P.margeBrute, /budget/i) ?? null;
+  const ebitdaReelCol = special(P.ebitda, /réel|reel|actual/i) ?? findCol(headers, P.ebitda);
+  const ebitdaBudgetCol = special(P.ebitda, /budget/i) ?? null;
   const rnCol = findCol(headers, P.resultatNet);
   const tresoCol = findCol(headers, P.tresorerie);
   const bfrCol = findCol(headers, P.bfr);
@@ -136,40 +251,41 @@ function parseData(docs: DocFile[]): ParsedData {
   const dpoCol = findCol(headers, P.dpo);
   const entiteCol = findCol(headers, P.entite);
 
-  const makeKpi = (
-    reelCol: string | null,
-    budgetCol2: string | null,
-    n1Col: string | null,
-    isDays = false
-  ): KpiValue => {
+  // If 2 separate files and no type column, treat doc1=Réel, doc2=Budget
+  const useMultiFile = docs.length >= 2 && !typeCol && doc2Rows.length > 0;
+  const h2 = doc2Rows.length > 0 ? Object.keys(doc2Rows[0]) : [];
+  const isBudgetFile2 = useMultiFile && h2.some((h) => H_BUDGET.test(h));
+  const isN1File2 = useMultiFile && h2.some((h) => H_N1.test(h));
+  const reelSrc = useMultiFile ? doc1Rows : reelRows;
+  const budgetSrc = isBudgetFile2 ? doc2Rows : budgetRows;
+  const n1Src = isN1File2 ? doc2Rows : n1Rows;
+
+  const mkH = (col: string | null, budCol: string | null, n1Col: string | null, isDays = false): KpiValue => {
     const agg = isDays ? avgCol : sumCol;
-    const reel = agg(reelRows, reelCol ?? "");
-    const budget = budgetCol2
-      ? (agg(reelRows, budgetCol2) ?? agg(reelRows, reelCol ?? "") ?? null)
-      : (budgetRows.length > 0 ? agg(budgetRows, reelCol ?? "") : null);
-    const nMoins1 = n1Col
-      ? (agg(reelRows, n1Col) ?? (n1Rows.length > 0 ? agg(n1Rows, reelCol ?? "") : null))
-      : (n1Rows.length > 0 ? agg(n1Rows, reelCol ?? "") : null);
-    return { reel: reelCol ? reel : null, budget: budgetCol2 ? budget : budget, nMoins1 };
+    return {
+      reel: col ? agg(reelSrc, col) : null,
+      budget: budCol ? agg(reelSrc, budCol) : (col ? agg(budgetSrc, col) : null),
+      nMoins1: n1Col ? agg(reelSrc, n1Col) : (col ? agg(n1Src, col) : null),
+    };
   };
 
   const kpis = {
-    ca: makeKpi(caReelCol, caBudgetCol, caN1Col),
-    margeBrute: makeKpi(margeReelCol, margeBudgetCol, null),
-    ebitda: makeKpi(ebitdaReelCol, ebitdaBudgetCol, null),
-    resultatNet: makeKpi(rnCol, null, null),
-    tresorerie: makeKpi(tresoCol, null, null),
-    bfr: makeKpi(bfrCol, null, null),
-    dso: makeKpi(dsoCol, null, null, true),
-    dpo: makeKpi(dpoCol, null, null, true),
+    ca: mkH(caReelCol, caBudgetCol, caN1Col),
+    margeBrute: mkH(margeReelCol, margeBudgetCol, null),
+    ebitda: mkH(ebitdaReelCol, ebitdaBudgetCol, null),
+    resultatNet: mkH(rnCol, null, null),
+    tresorerie: mkH(tresoCol, null, null),
+    bfr: mkH(bfrCol, null, null),
+    dso: mkH(dsoCol, null, null, true),
+    dpo: mkH(dpoCol, null, null, true),
   };
 
   // Entities
   const entities: ParsedData["entities"] = [];
   if (entiteCol && caReelCol) {
-    const names = [...new Set(reelRows.map((r) => r[entiteCol]).filter(Boolean))];
+    const names = [...new Set(reelSrc.map((r) => r[entiteCol]).filter(Boolean))];
     for (const name of names.slice(0, 8)) {
-      const rows = reelRows.filter((r) => r[entiteCol] === name);
+      const rows = reelSrc.filter((r) => r[entiteCol] === name);
       entities.push({
         name,
         ca: sumCol(rows, caReelCol) ?? 0,
@@ -180,31 +296,23 @@ function parseData(docs: DocFile[]): ParsedData {
     entities.sort((a, b) => b.ca - a.ca);
   }
 
-  // Variances
-  const KPI_LABELS: Record<string, string> = {
-    ca: "Chiffre d'affaires", margeBrute: "Marge brute", ebitda: "EBITDA",
-    resultatNet: "Résultat net", tresorerie: "Trésorerie", bfr: "BFR",
-  };
-  const REVENUE_METRICS = new Set(["ca", "margeBrute", "ebitda", "resultatNet", "tresorerie"]);
+  return { kpis, entities, variances: buildVariances(kpis) };
+}
 
-  const variances: ParsedData["variances"] = [];
-  for (const [key, kpi] of Object.entries(kpis)) {
-    if (!KPI_LABELS[key] || kpi.reel === null) continue;
-    const ref = kpi.budget ?? kpi.nMoins1;
-    if (ref === null || ref === 0) continue;
-    const ecart = kpi.reel - ref;
-    const pct = (ecart / Math.abs(ref)) * 100;
-    const isGood = REVENUE_METRICS.has(key) ? ecart >= 0 : ecart <= 0;
-    const refLabel = kpi.budget !== null ? "vs Budget" : "vs N-1";
-    variances.push({
-      label: `${KPI_LABELS[key]} (${refLabel})`,
-      ecart, pct, isGood,
-      isAlert: Math.abs(pct) > 10,
-    });
-  }
-  variances.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
+/* ── Main parsing function: tries vertical P&L first, then horizontal ── */
+function parseData(docs: DocFile[]): ParsedData {
+  const allRows: Record<string, string>[] = [];
+  for (const doc of docs) allRows.push(...parseCsv(doc.text));
+  if (allRows.length === 0) return { kpis: emptyKpis(), entities: [], variances: [] };
 
-  return { kpis, entities, variances: variances.slice(0, 6) };
+  const headers = Object.keys(allRows[0]);
+
+  // Try vertical P&L format (rows = KPI labels)
+  const vertResult = parseVertical(allRows, headers);
+  if (vertResult) return vertResult;
+
+  // Fallback: horizontal format
+  return parseHorizontal(allRows, docs);
 }
 
 /* ── KPI Card ── */
