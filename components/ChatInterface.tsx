@@ -28,7 +28,7 @@ const AGENTS: Agent[] = [
   {
     id: "daf",
     name: "DAF",
-    fullName: "Directeur Admin. & Financier",
+    fullName: "Responsable Admin. & Financier",
     icon: <IconChartBar className="w-4 h-4" />,
     systemPrompt:
       `Tu es Strato, l'Agent DAF de NextStrato. Tu es un analyste financier expert spécialisé dans l'automatisation du cycle de clôture mensuel et la production de dashboards financiers consolidés.
@@ -70,13 +70,13 @@ Réponds en français, de manière précise et chiffrée. Utilise des tableaux M
   {
     id: "drh",
     name: "DRH",
-    fullName: "Directeur des Ressources Humaines",
+    fullName: "Responsable des Ressources Humaines",
     icon: <IconUsers className="w-4 h-4" />,
     systemPrompt:
       "Tu es Strato, un assistant IA expert en ressources humaines pour NextStrato. Tu accompagnes les Directeurs RH dans leurs missions : recrutement, gestion des talents, politique salariale, plan de formation, conformité légale et dialogue social. Tu proposes des pratiques RH concrètes, des modèles de documents et des recommandations adaptées au contexte de l'entreprise. Réponds en français, de manière bienveillante, structurée et professionnelle.",
     suggestions: [
-      "Optimiser ma politique salariale",
-      "Construire un plan de formation annuel",
+      "Optimise ma politique salariale",
+      "Construit un plan de formation annuel",
       "Stratégie de rétention des talents",
       "Points de vigilance droit du travail",
     ],
@@ -84,26 +84,26 @@ Réponds en français, de manière précise et chiffrée. Utilise des tableaux M
   {
     id: "commerce",
     name: "Commerce",
-    fullName: "Directeur Commercial",
+    fullName: "Commercial",
     icon: <IconTrendingUp className="w-4 h-4" />,
     systemPrompt:
       "Tu es Strato, un assistant IA expert en développement commercial pour NextStrato. Tu accompagnes les Directeurs Commerciaux dans leurs missions : stratégie de vente, gestion du pipeline, acquisition et fidélisation clients, pilotage des équipes et prévisions de revenus. Tu proposes des analyses de performance, des stratégies de croissance et des outils de pilotage commercial. Réponds en français, de manière dynamique, orientée résultats et professionnelle.",
     suggestions: [
       "Analyse mon pipeline de ventes",
-      "Préparer RDV prospect / client",
+      "Prépare mon RDV prospect / client",
       "Prévisions commerciales Q4",
-      "Optimiser mes offres et propositions",
+      "Optimise mes offres et propositions",
     ],
   },
   {
     id: "operations",
     name: "Opération",
-    fullName: "Directeur des Opérations",
+    fullName: "Responsable des Opérations",
     icon: <IconLayers className="w-4 h-4" />,
     systemPrompt:
       "Tu es Strato, un assistant IA expert en management des opérations pour NextStrato. Tu accompagnes les Directeurs des Opérations dans leurs missions : optimisation des processus, gestion de la supply chain, pilotage de la production, amélioration continue et gestion des risques opérationnels. Tu proposes des analyses de performance, des plans d'action concrets et des indicateurs de suivi. Réponds en français, de manière structurée, orientée terrain et professionnelle.",
     suggestions: [
-      "Optimiser mes processus internes",
+      "Optimise mes processus internes",
       "Analyse de ma supply chain",
       "Indicateurs de performance opérationnelle",
       "Plan d'amélioration continue",
@@ -113,7 +113,7 @@ Réponds en français, de manière précise et chiffrée. Utilise des tableaux M
 
 const DEFAULT_SUGGESTIONS = [
   "Comment optimiser mes opérations ?",
-  "Analysez mes données métier",
+  "Analyse mes données métier",
   "Qu'est-ce que la transformation digitale ?",
   "Comment NextStrato peut m'aider ?",
 ];
