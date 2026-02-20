@@ -48,7 +48,7 @@ Réponds en français, de manière précise, chiffrée et directement actionnabl
       "Analyse les écarts de ma clôture mensuelle",
       "Génère un commentaire COMEX sur mes résultats",
       "Détecte les dérives de marge dans mes données",
-      "Prépare mon tableau de bord trésorerie",
+      "Prépare mon tableau de bord Financier",
     ],
   },
   {
@@ -566,19 +566,6 @@ ${rows}
               📊 <span>Analyser</span>
             </button>
 
-            {activeAgent?.id === "daf" && (
-              <button
-                onClick={() => documents.length >= 1 && setShowFinancialDashboard(true)}
-                title={documents.length === 0 ? "Chargez un fichier pour accéder au dashboard" : "Dashboard financier DAF"}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
-                style={{ background: documents.length >= 1 ? "#8B5CF6" : "#F5F5FA", border: `1px solid ${documents.length >= 1 ? "#8B5CF6" : "#E4E4EF"}`, color: documents.length >= 1 ? "#fff" : "#71718A", cursor: documents.length >= 1 ? "pointer" : "not-allowed", transition: "all 0.15s", opacity: documents.length >= 1 ? 1 : 0.7 }}
-                onMouseEnter={(e) => { if (documents.length >= 1) e.currentTarget.style.opacity = "0.85"; }}
-                onMouseLeave={(e) => { if (documents.length >= 1) e.currentTarget.style.opacity = "1"; }}
-              >
-                💼 <span>Dashboard DAF</span>
-              </button>
-            )}
-
             <button
               onClick={() => setShowKB((v) => !v)}
               title="Base de connaissances"
@@ -640,13 +627,20 @@ ${rows}
                   {activeAgent ? `Cas d'usage — ${activeAgent.name}` : "Suggestions"}
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center">
-                  {activeSuggestions.map((s) => (
-                    <button key={s} onClick={() => sendMessage(s)} className="px-4 py-2 rounded-full text-sm transition-all"
-                      style={{ border: `1px solid ${hexToRgba(primary, 0.3)}`, background: hexToRgba(primary, 0.05), color: primary }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = hexToRgba(primary, 0.12); e.currentTarget.style.borderColor = hexToRgba(primary, 0.5); }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = hexToRgba(primary, 0.05); e.currentTarget.style.borderColor = hexToRgba(primary, 0.3); }}
-                    >{s}</button>
-                  ))}
+                  {activeSuggestions.map((s) => {
+                    const isDashboardSuggestion = activeAgent?.id === "daf" && s === "Prépare mon tableau de bord Financier";
+                    return (
+                      <button key={s}
+                        onClick={() => isDashboardSuggestion ? setShowFinancialDashboard(true) : sendMessage(s)}
+                        className="px-4 py-2 rounded-full text-sm transition-all"
+                        style={{ border: `1px solid ${isDashboardSuggestion ? "rgba(139,92,246,0.35)" : hexToRgba(primary, 0.3)}`, background: isDashboardSuggestion ? "rgba(139,92,246,0.07)" : hexToRgba(primary, 0.05), color: isDashboardSuggestion ? "#8B5CF6" : primary }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = isDashboardSuggestion ? "rgba(139,92,246,0.14)" : hexToRgba(primary, 0.12); e.currentTarget.style.borderColor = isDashboardSuggestion ? "rgba(139,92,246,0.55)" : hexToRgba(primary, 0.5); }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = isDashboardSuggestion ? "rgba(139,92,246,0.07)" : hexToRgba(primary, 0.05); e.currentTarget.style.borderColor = isDashboardSuggestion ? "rgba(139,92,246,0.35)" : hexToRgba(primary, 0.3); }}
+                      >
+                        {isDashboardSuggestion ? "💼 " : ""}{s}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -688,13 +682,6 @@ ${rows}
                     onMouseEnter={(e) => (e.currentTarget.style.background = hexToRgba(primary, 0.18))}
                     onMouseLeave={(e) => (e.currentTarget.style.background = hexToRgba(primary, 0.1))}
                   >📊 Analyser</button>
-                )}
-                {activeAgent?.id === "daf" && documents.length >= 1 && (
-                  <button onClick={() => setShowFinancialDashboard(true)} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
-                    style={{ background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.35)", color: "#8B5CF6", cursor: "pointer" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(139,92,246,0.18)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(139,92,246,0.1)")}
-                  >💼 Dashboard DAF</button>
                 )}
               </div>
             )}
