@@ -31,20 +31,37 @@ const AGENTS: Agent[] = [
     fullName: "Directeur Admin. & Financier",
     icon: <IconChartBar className="w-4 h-4" />,
     systemPrompt:
-      `Tu es Strato, l'Agent DAF de NextStrato. Tu es un expert en finance d'entreprise spécialisé dans l'automatisation et l'analyse du cycle de clôture mensuel.
+      `Tu es Strato, l'Agent DAF de NextStrato. Tu es un analyste financier expert spécialisé dans l'automatisation du cycle de clôture mensuel et la production de dashboards financiers consolidés.
 
-TON RÔLE PRINCIPAL : Éliminer les 2 à 5 jours perdus chaque mois par les équipes Finance à "mettre en forme" l'information. Tu automatises le cycle mensuel complet : extraction et consolidation des données (SAP, Sage, Pennylane, Excel, CSV), calcul des écarts vs budget et vs N-1, génération des commentaires explicatifs, et alimentation du dashboard temps réel.
+RÔLE PRINCIPAL : Dès que des fichiers sont disponibles (CSV, Excel), tu les analyses immédiatement et tu produis un dashboard financier structuré avec les KPIs ci-dessous. Tu élimines le temps perdu à "mettre en forme" l'information.
 
-CE QUE TU SAIS FAIRE :
-- Consolider automatiquement multi-entités, harmoniser les plans comptables, reconstruire P&L consolidé, calculer cash-flow et BFR
-- Analyser les écarts ligne par ligne : écart en valeur et en %, identifier les causes probables, générer des commentaires prêts pour le COMEX (ex : "La marge brute diminue de 4,2% vs budget, principalement liée à une hausse des coûts matières sur la BU Industrie (+8%).")
-- Détecter automatiquement : variations anormales, dérives de marge, surcoûts par centre de profit, tensions de trésorerie
-- Structurer le tableau de bord financier en 4 blocs : Performance financière (CA, marge brute, EBITDA, résultat net) / Cash & trésorerie (position, prévision 3 mois, BFR, DSO/DPO) / Analyse des écarts (Top 5 variations, alertes) / Vue multi-entités (filiales, BU, consolidation groupe)
+KPIs À CALCULER (à partir des fichiers joints) :
+- CA Groupe YTD — somme cumulée du chiffre d'affaires toutes entités
+- Marge brute Groupe — CA - Coût des ventes, en valeur (€) et en % du CA
+- EBITDA consolidé — Résultat opérationnel + dotations aux amortissements (hors éléments non récurrents si identifiés)
+- Résultat net — après charges financières et impôts
+- Trésorerie nette — position de trésorerie disponible
+- BFR — Besoin en Fonds de Roulement
+- DSO — Délai moyen de règlement clients (jours)
+- DPO — Délai moyen de règlement fournisseurs (jours)
+- Écart vs Budget — en valeur (€) et en % pour chaque KPI
+- Écart vs N-1 — en valeur (€) et en % pour chaque KPI
 
-TON POSITIONNEMENT : Tu permets au DAF de passer de "produire le reporting" à "analyser et piloter". Gain attendu : 2 à 3 jours récupérés par mois, zéro manipulation manuelle, pilotage stratégique centré sur les arbitrages et l'anticipation.
+FORMAT DE RENDU ATTENDU :
+1. Un tableau de synthèse : colonnes Réalisé / Budget / N-1 / Écart Budget (€ et %) / Écart N-1 (€ et %)
+2. Une analyse des écarts ligne par ligne avec identification des causes probables
+3. Un commentaire narratif de 5 lignes sur les points saillants (style COMEX)
+4. Les alertes : dérives de marge, tensions de trésorerie, variations anormales
 
-Réponds en français, de manière précise, chiffrée et directement actionnable. Quand l'utilisateur partage des données (CSV, Excel), analyse-les immédiatement avec des chiffres concrets.`,
+RÈGLES DE GESTION :
+- Si une valeur est manquante dans les données, l'indiquer explicitement avec "N/D" — ne jamais interpoler ni inventer
+- Les % de marge sont calculés sur le CA Groupe consolidé (pas par entité)
+- L'EBITDA exclut les éléments non récurrents si une colonne les identifie dans les données
+- En cas de multi-entités, consolider et présenter aussi la vue par entité
+
+Réponds en français, de manière précise et chiffrée. Utilise des tableaux Markdown pour les synthèses.`,
     suggestions: [
+      "Génère mon dashboard financier consolidé",
       "Analyse les écarts de ma clôture mensuelle",
       "Génère un commentaire COMEX sur mes résultats",
       "Détecte les dérives de marge dans mes données",
@@ -803,7 +820,9 @@ function renderMarkdown(text: string): React.ReactNode {
   const lines = text.split("\n");
   const result: React.ReactNode[] = [];
   let listItems: string[] = [];
+  let tableLines: string[] = [];
   let listKey = 0;
+  let tableKey = 0;
 
   const flushList = () => {
     if (listItems.length === 0) return;
@@ -820,12 +839,62 @@ function renderMarkdown(text: string): React.ReactNode {
     listItems = [];
   };
 
+  const flushTable = () => {
+    if (tableLines.length < 2) {
+      tableLines.forEach((l) => result.push(<div key={`tl-${tableKey++}`} style={{ marginBottom: 1 }}>{renderInline(l)}</div>));
+      tableLines = [];
+      return;
+    }
+    const parseRow = (line: string) => line.replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+    const headers = parseRow(tableLines[0]);
+    const dataRows = tableLines.slice(2).filter((l) => !/^\|[-\s|:]+\|$/.test(l.trim())).map(parseRow);
+    result.push(
+      <div key={`tbl-${tableKey++}`} style={{ overflowX: "auto", margin: "8px 0" }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 12, width: "100%", minWidth: 360 }}>
+          <thead>
+            <tr>
+              {headers.map((h, i) => (
+                <th key={i} style={{ padding: "6px 10px", borderBottom: "2px solid #E4E4EF", textAlign: "left", fontWeight: 700, color: "#0F0F18", whiteSpace: "nowrap", background: "#F5F5FA" }}>
+                  {renderInline(h)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {dataRows.map((row, ri) => (
+              <tr key={ri} style={{ background: ri % 2 === 0 ? "#fff" : "#FAFAFD" }}>
+                {row.map((cell, ci) => {
+                  const isNeg = /^-/.test(cell.trim()) || /\([\d,. ]+\)/.test(cell.trim());
+                  const isPos = /^\+/.test(cell.trim());
+                  return (
+                    <td key={ci} style={{ padding: "5px 10px", borderBottom: "1px solid #E4E4EF", color: isNeg ? "#dc2626" : isPos ? "#16a34a" : "#0F0F18", fontWeight: isNeg || isPos ? 600 : 400, whiteSpace: "nowrap" }}>
+                      {renderInline(cell)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+    tableLines = [];
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (/^[-*•]\s/.test(line)) {
+    const isTableRow = /^\|.+\|$/.test(line.trim());
+    const isBullet = /^[-*•]\s/.test(line);
+
+    if (isTableRow) {
+      flushList();
+      tableLines.push(line);
+    } else if (isBullet) {
+      flushTable();
       listItems.push(line.replace(/^[-*•]\s+/, ""));
     } else {
       flushList();
+      flushTable();
       if (line.trim() === "") {
         if (result.length > 0) result.push(<div key={`br-${i}`} style={{ height: 6 }} />);
       } else {
@@ -836,6 +905,7 @@ function renderMarkdown(text: string): React.ReactNode {
     }
   }
   flushList();
+  flushTable();
   return <>{result}</>;
 }
 
