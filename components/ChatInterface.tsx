@@ -798,7 +798,7 @@ function MessageBubble({ msg, isCurrentlyStreaming, primary }: { msg: Message; i
           <IconBolt className="w-4 h-4" style={{ color: primary }} />
         </div>
       )}
-      <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed"
+      <div className="max-w-[100%] rounded-2xl px-4 py-3 text-sm leading-relaxed"
         style={isUser
           ? { background: primary, color: "#fff", borderRadius: "18px 4px 18px 18px", boxShadow: `0 2px 16px ${hexToRgba(primary, 0.25)}` }
           : { background: "#FFFFFF", border: "1px solid #E4E4EF", color: "#0F0F18", borderRadius: "4px 18px 18px 18px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }

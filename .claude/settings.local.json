@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --version:*)",
+      "Bash(npm:*)",
+      "Bash(npx create-next-app:*)",
+      "Bash(npx shadcn@latest init:*)",
+      "Bash(node:*)",
+      "WebFetch(domain:annuaire-entreprises.data.gouv.fr)",
+      "WebFetch(domain:recherche-entreprises.api.gouv.fr)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git rebase:*)",
+      "Bash(git fetch:*)",
+      "Bash(git reset:*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}
