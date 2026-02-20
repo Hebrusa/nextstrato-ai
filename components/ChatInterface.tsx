@@ -4,7 +4,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import ConfigPanel, { Config, DEFAULT_CONFIG } from "./ConfigPanel";
 import AgentDocPanel from "./AgentDocPanel";
 import DataVizModal, { DocFile } from "./DataVizModal";
-import FinancialDashboard from "./FinancialDashboard";
 import KnowledgeBasePanel, { KBDoc } from "./KnowledgeBasePanel";
 
 /* ── Color helpers ── */
@@ -49,7 +48,6 @@ Réponds en français, de manière précise, chiffrée et directement actionnabl
       "Analyse les écarts de ma clôture mensuelle",
       "Génère un commentaire COMEX sur mes résultats",
       "Détecte les dérives de marge dans mes données",
-      "Prépare mon tableau de bord Financier",
     ],
   },
   {
@@ -230,7 +228,6 @@ export default function ChatInterface() {
   const [isParsingDoc, setIsParsingDoc] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showDataViz, setShowDataViz] = useState(false);
-  const [showFinancialDashboard, setShowFinancialDashboard] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -481,7 +478,6 @@ ${rows}
 
       {showConfig && <ConfigPanel config={config} onChange={updateConfig} onClose={() => setShowConfig(false)} onReset={resetConfig} />}
       {showDataViz && documents.length >= 1 && <DataVizModal documents={documents} primary={primary} onClose={() => setShowDataViz(false)} />}
-      {showFinancialDashboard && <FinancialDashboard documents={documents} primary={primary} onClose={() => setShowFinancialDashboard(false)} />}
       {showKB && <KnowledgeBasePanel docs={knowledgeBase} primary={primary} onAdd={addKBDoc} onRemove={removeKBDoc} onClose={() => setShowKB(false)} />}
 
       {/* ════ SIDEBAR ════ */}
@@ -650,20 +646,17 @@ ${rows}
                   {activeAgent ? `Cas d'usage — ${activeAgent.name}` : "Suggestions"}
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center">
-                  {activeSuggestions.map((s) => {
-                    const isDashboardSuggestion = activeAgent?.id === "daf" && s === "Prépare mon tableau de bord Financier";
-                    return (
-                      <button key={s}
-                        onClick={() => isDashboardSuggestion ? setShowFinancialDashboard(true) : sendMessage(s)}
-                        className="px-4 py-2 rounded-full text-sm transition-all"
-                        style={{ border: `1px solid ${isDashboardSuggestion ? "rgba(139,92,246,0.35)" : hexToRgba(primary, 0.3)}`, background: isDashboardSuggestion ? "rgba(139,92,246,0.07)" : hexToRgba(primary, 0.05), color: isDashboardSuggestion ? "#8B5CF6" : primary }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = isDashboardSuggestion ? "rgba(139,92,246,0.14)" : hexToRgba(primary, 0.12); e.currentTarget.style.borderColor = isDashboardSuggestion ? "rgba(139,92,246,0.55)" : hexToRgba(primary, 0.5); }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = isDashboardSuggestion ? "rgba(139,92,246,0.07)" : hexToRgba(primary, 0.05); e.currentTarget.style.borderColor = isDashboardSuggestion ? "rgba(139,92,246,0.35)" : hexToRgba(primary, 0.3); }}
-                      >
-                        {isDashboardSuggestion ? "💼 " : ""}{s}
-                      </button>
-                    );
-                  })}
+                  {activeSuggestions.map((s) => (
+                    <button key={s}
+                      onClick={() => sendMessage(s)}
+                      className="px-4 py-2 rounded-full text-sm transition-all"
+                      style={{ border: `1px solid ${hexToRgba(primary, 0.3)}`, background: hexToRgba(primary, 0.05), color: primary }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = hexToRgba(primary, 0.12); e.currentTarget.style.borderColor = hexToRgba(primary, 0.5); }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = hexToRgba(primary, 0.05); e.currentTarget.style.borderColor = hexToRgba(primary, 0.3); }}
+                    >
+                      {s}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -717,7 +710,6 @@ ${rows}
         onRemove={removeDocument}
         onClearError={() => setUploadError(null)}
         onAnalyze={() => setShowDataViz(true)}
-        onDashboard={() => setShowFinancialDashboard(true)}
       />
     </div>
   );

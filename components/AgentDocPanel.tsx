@@ -22,12 +22,11 @@ type Props = {
   onRemove: (agentId: string, index: number) => void;
   onClearError: () => void;
   onAnalyze: () => void;
-  onDashboard: () => void;
 };
 
 export default function AgentDocPanel({
   agents, activeAgentId, agentDocs, primary, isUploading, uploadError,
-  onUpload, onRemove, onClearError, onAnalyze, onDashboard,
+  onUpload, onRemove, onClearError, onAnalyze,
 }: Props) {
   const hasAnyDoc = agents.some((a) => (agentDocs[a.id] ?? []).length > 0);
 
@@ -138,21 +137,6 @@ export default function AgentDocPanel({
                   >
                     📊 Analyser les données
                   </button>
-                  {agent.id === "daf" && (
-                    <button
-                      onClick={onDashboard}
-                      style={{
-                        width: "100%", padding: "7px 10px", borderRadius: 7, textAlign: "left",
-                        border: "1px solid rgba(139,92,246,0.3)",
-                        background: "rgba(139,92,246,0.06)",
-                        color: "#8B5CF6", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(139,92,246,0.12)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(139,92,246,0.06)"; }}
-                    >
-                      💼 Dashboard Financier
-                    </button>
-                  )}
                 </div>
               )}
 
