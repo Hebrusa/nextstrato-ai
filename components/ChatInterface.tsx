@@ -462,7 +462,7 @@ ${rows}
       {showKB && <KnowledgeBasePanel docs={knowledgeBase} primary={primary} onAdd={addKBDoc} onRemove={removeKBDoc} onClose={() => setShowKB(false)} />}
 
       {/* ════ SIDEBAR ════ */}
-      <aside style={{ width: 232, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid #D4DCFB", background: "#577cf3", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: "rgba(79,110,247,0.15) transparent" }}>
+      <aside style={{ width: 232, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid #E4E4EF", background: "#FFFFFF", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: "rgba(0,0,0,0.08) transparent" }}>
 
         <div style={{ padding: "12px 8px 4px" }}>
           <button
@@ -486,7 +486,7 @@ ${rows}
 
         {conversations.length > 0 && (
           <>
-            <div style={{ margin: "0 8px", borderTop: "1px solid #D4DCFB" }} />
+            <div style={{ margin: "0 8px", borderTop: "1px solid #E4E4EF" }} />
             <div style={{ padding: "14px 14px 6px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#71718A", margin: 0 }}>Historique</p>
               <span style={{ fontSize: 10, color: "#71718A", fontWeight: 500 }}>{conversations.length}</span>
@@ -499,7 +499,7 @@ ${rows}
                     key={conv.id}
                     onClick={() => loadConversation(conv)}
                     style={{ width: "100%", padding: "9px 10px", borderRadius: 8, border: `1px solid ${isActive ? hexToRgba(primary, 0.3) : "#E4E4EF"}`, borderLeft: `3px solid ${isActive ? primary : "transparent"}`, background: isActive ? hexToRgba(primary, 0.06) : "transparent", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 6, transition: "all 0.12s" }}
-                    onMouseEnter={(e) => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = "rgba(79,110,247,0.06)"; (e.currentTarget as HTMLElement).style.borderColor = "#D4DCFB"; } }}
+                    onMouseEnter={(e) => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = hexToRgba(primary, 0.05); (e.currentTarget as HTMLElement).style.borderColor = hexToRgba(primary, 0.2); } }}
                     onMouseLeave={(e) => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.borderColor = "#E4E4EF"; } }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
